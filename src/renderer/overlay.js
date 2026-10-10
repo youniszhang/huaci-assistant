@@ -58,110 +58,9 @@
     toastTimer = setTimeout(() => toast.classList.add("hidden"), ms || 2200);
   }
 
-  /** 极简 Markdown → HTML */
+  /** Markdown → HTML（共享渲染器，支持 GFM 表格；见 md.js） */
   function mdToHtml(md) {
-    if (!md) return "";
-    md = md.replace(/^\*{2,}\s*([：:])\s*/gm, "$1").replace(/^\*{2,}\s*$/gm, "");
-    const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-    const blocks = [];
-    let text = md.replace(/```([a-zA-Z0-9]*)\n?([\s\S]*?)```/g, (_m, lang, code) => {
-      const i = blocks.length;
-      blocks.push(`<pre><code data-lang="${esc(lang || "")}">${esc(code.replace(/\n$/, ""))}</code></pre>`);
-      return `\u0000BLOCK${i}\u0000`;
-    });
-
-    text = esc(text);
-
-    const inline = (s) =>
-      s
-        .replace(/`([^`]+)`/g, "<code>$1</code>")
-        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-        .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
-        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2">$1</a>');
-
-    const lines = text.split("\n");
-    const out = [];
-    let listType = null;
-    let para = [];
-
-    const flushPara = () => {
-      if (para.length) {
-        out.push(`<p>${inline(para.join("<br>"))}</p>`);
-        para = [];
-      }
-    };
-    const closeList = () => {
-      if (listType) {
-        out.push(`</${listType}>`);
-        listType = null;
-      }
-    };
-
-    for (const raw of lines) {
-      const line = raw.replace(/\s+$/, "");
-      const t = line.trim();
-
-      if (/^\u0000BLOCK\d+\u0000$/.test(t)) {
-        flushPara();
-        closeList();
-        out.push(t);
-        continue;
-      }
-      if (!t) {
-        flushPara();
-        closeList();
-        continue;
-      }
-      const h = t.match(/^(#{1,6})\s+(.*)$/);
-      if (h) {
-        flushPara();
-        closeList();
-        out.push(`<h${Math.min(h[1].length + 1, 4)}>${inline(h[2])}</h${Math.min(h[1].length + 1, 4)}>`);
-        continue;
-      }
-      if (t.startsWith(">")) {
-        flushPara();
-        closeList();
-        out.push(`<blockquote>${inline(t.replace(/^>\s?/, ""))}</blockquote>`);
-        continue;
-      }
-      const ul = t.match(/^[-*+]\s+(.*)$/);
-      if (ul) {
-        flushPara();
-        if (listType !== "ul") {
-          closeList();
-          out.push("<ul>");
-          listType = "ul";
-        }
-        out.push(`<li>${inline(ul[1])}</li>`);
-        continue;
-      }
-      const ol = t.match(/^\d+[.)]\s+(.*)$/);
-      if (ol) {
-        flushPara();
-        if (listType !== "ol") {
-          closeList();
-          out.push("<ol>");
-          listType = "ol";
-        }
-        out.push(`<li>${inline(ol[1])}</li>`);
-        continue;
-      }
-      if (/^[-=_*~]{3,}$/.test(t)) {
-        flushPara();
-        closeList();
-        out.push("<hr>");
-        continue;
-      }
-      para.push(line);
-    }
-    flushPara();
-    closeList();
-
-    let html = out.join("");
-    html = html.replace(/\u0000BLOCK(\d+)\u0000/g, (_m, i) => blocks[Number(i)] || "");
-    return html;
+    return window.HuaciMd ? window.HuaciMd.render(md) : String(md || "");
   }
 
   function render() {
@@ -250,6 +149,36 @@
   btnClose.addEventListener("click", () => api.hideOverlay());
   // 工具条关闭：选区消失会收起工具条，这里也提供手动关闭
   btnTbClose.addEventListener("click", () => api.hideOverlay());
+
+  // ------------------------------------------------ JS 拖动
+  //
+  // 不用 -webkit-app-region：透明 + focusable:false 窗口上行为不稳定，
+  // 且 drag 区域会吞掉子元素点击（曾导致卡片 ✕ 失灵）。
+  // 这里只上报起止，跟随由主进程 16ms 定时器完成（见 overlay.ts drag()）。
+  // 注意：window 里的 mouseup 可能落在窗口外而丢失，mouseup 阶段改监听 document，
+  // 配合主进程 30s 兜底停表。
+  (function setupDrag() {
+    // 工具条：整条可拖；卡片：仅头部可拖。
+    // 命中按钮/输入框等交互元素时不启动拖动（避免吞掉点击）。
+    function dragTarget(e) {
+      if (e.button !== 0) return null;
+      const t = e.target;
+      if (t.closest("button, input, textarea, select, a, .icon-picker-pop")) return null;
+      if (state.mode === "toolbar" && t.closest("#toolbar")) return toolbar;
+      if (state.mode === "card" && t.closest(".card-head")) return card;
+      return null;
+    }
+    window.addEventListener("mousedown", (e) => {
+      if (!dragTarget(e)) return;
+      e.preventDefault();
+      api.dragOverlay("start");
+      const stop = () => {
+        api.dragOverlay("end");
+        document.removeEventListener("mouseup", stop);
+      };
+      document.addEventListener("mouseup", stop);
+    });
+  })();
 
   btnCopy.addEventListener("click", async () => {
     if (!state.content) return;

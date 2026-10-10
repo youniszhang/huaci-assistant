@@ -500,6 +500,60 @@ export function killBrowser(): void {
 	browserProc = null;
 }
 
+/**
+ * 打开登录页：在专用浏览器（CDP profile）内导航到登录页并置前。
+ *
+ * 关键：绝不能用 shell.openExternal —— 那会打开系统默认浏览器，
+ * 登录态写进日常浏览器的 profile，与专用 profile（aie-dsweb-profile）无关，
+ * 表现为「明明登录了，助手仍提示未登录」。
+ */
+export async function openLoginPage(port: number): Promise<CDPClient> {
+	// 可见窗口（headless 下用户无法操作登录页）
+	await ensureBrowser(port, false);
+	const client = await connectDeepSeekForLogin(port);
+	// 导航到登录页（connectDeepSeekForLogin 已停在 deepseek 域，这里直达 sign_in）
+	await client.send("Page.navigate", { url: "https://chat.deepseek.com/sign_in" });
+	await new Promise((r) => setTimeout(r, 2500));
+	await client.send("Page.bringToFront", {}).catch(() => {});
+	return client;
+}
+
+/** 为登录流程连接 DeepSeek 页面：与 connectDeepSeek 相同，但不强制跳回首页（避免打断用户手动导航） */
+async function connectDeepSeekForLogin(port: number): Promise<CDPClient> {
+	await ensureBrowser(port, false);
+	const targets: CDPTarget[] = await listTargets(port);
+	let target: CDPTarget | undefined = targets.find(
+		(t) => t.url.includes("chat.deepseek.com") && t.webSocketDebuggerUrl && t.type === "page"
+	);
+	if (!target) {
+		target = await newTab(port, "https://chat.deepseek.com/");
+	}
+	const client = await CDPClient.connect(target.webSocketDebuggerUrl!);
+	await client.send("Runtime.enable");
+	await client.send("Page.enable");
+	return client;
+}
+
+/**
+ * 登录态探测：headless 打开页面跑 PROBE，读完后关闭浏览器。
+ * 用于「登录页流程是否已完成」的确认（登录态在 profile 里，headless 也能读到）。
+ * 返回 null 表示探测本身失败（浏览器起不来等）。
+ */
+export async function probeLoginStatus(port: number): Promise<{ loggedIn: boolean } | null> {
+	let client: CDPClient | null = null;
+	try {
+		client = await connectDeepSeek(port, true);
+		const login = await checkLogin(client);
+		return { loggedIn: login.loggedIn };
+	} catch {
+		return null;
+	} finally {
+		try {
+			client?.close();
+		} catch {}
+	}
+}
+
 export interface AskOptions {
 	prompt: string;
 	expertMode: boolean;

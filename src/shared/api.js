@@ -21,6 +21,7 @@ const API = {
   'overlay:abort': 'overlay:abort',
   'overlay:save': 'overlay:save',
   'overlay:hide': 'overlay:hide',
+  'overlay:drag': 'overlay:drag',                // 渲染层 → main：卡片/工具条拖动
   'overlay:resize': 'overlay:resize',
   'overlay:focus': 'overlay:focus',              // 追问输入时临时获取焦点
   'overlay:open-main': 'overlay:open-main',
@@ -36,6 +37,13 @@ const API = {
   'config:test-provider': 'config:test-provider',
   'config:dsweb-login': 'config:dsweb-login',
   'config:dsweb-logout': 'config:dsweb-logout',
+  'config:dsweb-status': 'config:dsweb-status',  // main → renderer 推送：登录状态变化
+
+  // 生成历史
+  'history:list': 'history:list',
+  'history:get': 'history:get',
+  'history:delete': 'history:delete',
+  'history:clear': 'history:clear',
 
   // 应用设置
   'settings:get': 'settings:get',

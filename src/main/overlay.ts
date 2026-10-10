@@ -43,10 +43,73 @@ export class OverlayWindow {
 	private pending: { channel: string; payload: unknown }[] = [];
 	/** 应用是否正在退出：退出流程中必须放行 close，否则会阻断 app.quit() */
 	private quitting = false;
+	/** 用户是否手动拖动过悬浮窗（拖动后 resize/重定位不再拽回锚点） */
+	private userMoved = false;
+	/** 拖动跟随定时器（JS 拖动，见 drag()） */
+	private dragTimer: NodeJS.Timeout | null = null;
+	private dragOffset = { x: 0, y: 0 };
+	/** 拖动结束时间（用于抑制拖动引发的 selection 重发，见 isDragging） */
+	private dragEndedAt = 0;
 
 	/** 由 main 在 before-quit 时调用，解除 close 拦截，保证能正常退出 */
 	allowClose(): void {
 		this.quitting = true;
+	}
+
+	// ------------------------------------------------------------ 拖动
+	//
+	// 不用 -webkit-app-region：透明 + focusable:false 的窗口上该机制行为不稳定，
+	// 且 drag 区域会吞掉子元素点击（曾直接导致卡片 ✕ 按钮失灵）。
+	// 改为 JS 拖动：渲染层 mousedown/mouseup 通知起止，主进程以 16ms 跟随光标移动窗口。
+
+	/** 渲染层调用：phase = start | end */
+	drag(phase: string): void {
+		const win = this.window;
+		if (!win) return;
+		if (phase === "start") {
+			const cursor = screen.getCursorScreenPoint();
+			const b = win.getBounds();
+			this.dragOffset = { x: cursor.x - b.x, y: cursor.y - b.y };
+			if (this.dragTimer) clearInterval(this.dragTimer);
+			this.dragTimer = setInterval(() => {
+				const w = this.window;
+				if (!w || !w.isVisible()) {
+					this.stopDragTimer();
+					return;
+				}
+				const c = screen.getCursorScreenPoint();
+				w.setPosition(Math.round(c.x - this.dragOffset.x), Math.round(c.y - this.dragOffset.y));
+			}, 16);
+			// 兜底：mouseup 丢失（极端情况）时最多拖动 30s 自动停
+			setTimeout(() => {
+				if (this.dragTimer) this.stopDragTimer();
+			}, 30_000);
+		} else {
+			this.stopDragTimer();
+			this.userMoved = true;
+			this.dragEndedAt = Date.now();
+		}
+	}
+
+	private stopDragTimer(): void {
+		if (this.dragTimer) {
+			clearInterval(this.dragTimer);
+			this.dragTimer = null;
+		}
+	}
+
+	/**
+	 * 是否正在拖动（含结束后的 600ms 冷却）。
+	 * 拖动窗口时 helper 会把鼠标拖拽当作「重新划词」，80ms 后重发上一次的
+	 * selection，导致工具条被拽回选区锚点 —— main 用此方法抑制这些重发。
+	 */
+	isDragging(): boolean {
+		return !!this.dragTimer || Date.now() - this.dragEndedAt < 600;
+	}
+
+	/** 新选区/新会话到来时调用：恢复「跟随锚点」模式 */
+	resetUserPosition(): void {
+		this.userMoved = false;
 	}
 
 	create(): BrowserWindow {
@@ -59,7 +122,8 @@ export class OverlayWindow {
 			frame: false,
 			transparent: true,
 			resizable: false,
-			movable: false,
+			// movable:true —— JS 拖动依赖 setPosition；macOS 下 movable:false 会直接忽略 setPosition
+			movable: true,
 			fullscreenable: false,
 			skipTaskbar: true,
 			hasShadow: false,
@@ -110,10 +174,25 @@ export class OverlayWindow {
 	 * 把窗口摆到锚点附近，并做屏幕边界收敛。
 	 * pos 为**左上原点**坐标，语义：工具条应出现在 (x, y) 这一点的下方。
 	 * 下方空间不足则放到上方。
+	 *
+	 * 用户手动拖动过（userMoved）时忽略锚点：只调整尺寸、保持用户放的位置。
+	 * 否则每次宽度/高度自适应都会把窗口拽回选区旁，拖了等于白拖。
 	 */
 	private placeAt(pos: OverlayPosition, w: number, h: number): void {
 		const win = this.window;
 		if (!win) return;
+		if (this.userMoved) {
+			const b = win.getBounds();
+			// 保持用户位置；仍做屏幕边界收敛（防止拖到边缘后 resize 导致部分不可见）
+			const display = screen.getDisplayNearestPoint({ x: b.x, y: b.y });
+			const wa = display.workArea;
+			const x = Math.min(Math.max(b.x, wa.x + 4), wa.x + wa.width - w - 4);
+			const y = Math.min(Math.max(b.y, wa.y + 4), wa.y + wa.height - h - 4);
+			if (b.x !== x || b.y !== y || b.width !== w || b.height !== h) {
+				win.setBounds({ x, y, width: w, height: h });
+			}
+			return;
+		}
 		const display = screen.getDisplayNearestPoint({ x: Math.round(pos.x), y: Math.round(pos.y) });
 		const wa = display.workArea;
 

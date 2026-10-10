@@ -158,12 +158,14 @@ body {
   padding: 0 var(--sp-1) 0 var(--sp-3);
   border-bottom: 0.5px solid var(--c-separator);
 }
-.card-head,
-.card-head * {
-  -webkit-app-region: drag;
+/* 拖动：JS 实现（见 overlay.js），不用 -webkit-app-region。
+   原因：透明 + focusable:false 的窗口上 app-region 行为不稳定，且 drag 区域会吞掉
+   子元素点击（曾导致卡片 ✕ 点不动）。JS 拖动两窗口同一套代码，可测试。 */
+.card-head {
+  cursor: grab;
 }
-.card-head .icon-btn {
-  -webkit-app-region: no-drag;
+.card-head:active {
+  cursor: grabbing;
 }
 
 .head-icon {
@@ -388,6 +390,23 @@ body {
   border: none;
   border-top: 0.5px solid var(--c-separator);
 }
+.body del {
+  color: var(--c-text-3);
+}
+/* 宽表格：容器内横向滚动，不被卡片裁掉 */
+.table-wrap {
+  margin: 0 0 10px;
+  overflow-x: auto;
+  border: 0.5px solid var(--c-separator);
+  border-radius: var(--r-button);
+}
+.table-wrap table {
+  margin: 0;
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: var(--fs-small);
+}
 .body table {
   width: 100%;
   margin: 0 0 10px;
@@ -397,6 +416,27 @@ body {
 .body th, .body td {
   padding: 5px 8px;
   text-align: left;
+  border-bottom: 0.5px solid var(--c-separator);
+  vertical-align: top;
+}
+.table-wrap th, .table-wrap td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 0.5px solid var(--c-separator);
+  vertical-align: top;
+  white-space: nowrap;
+}
+.table-wrap th {
+  position: sticky;
+  top: 0;
+  font-weight: var(--fw-medium);
+  color: var(--c-text-2);
+  background: var(--c-bg);
+}
+.table-wrap tbody tr:last-child td {
+  border-bottom: none;
+}
+.table-wrap thead tr:last-child th {
   border-bottom: 0.5px solid var(--c-separator);
 }
 .body th {

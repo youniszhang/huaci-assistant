@@ -67,6 +67,7 @@
       .forEach((p) => p.classList.toggle("active", p.id === "page-" + btn.dataset.page));
     if (btn.dataset.page === "notes") loadNotes();
     if (btn.dataset.page === "providers") loadProviders();
+    if (btn.dataset.page === "history") loadHistory();
   });
 
   // ------------------------------------------------ 状态页
@@ -278,7 +279,7 @@
   });
 
   $("btnDswebLogin").addEventListener("click", async () => {
-    toast("正在启动专用浏览器…", 4000);
+    toast("正在打开专用浏览器登录页…", 4000);
     const res = await api.dswebLogin({});
     toast(res.ok ? res.message : "失败：" + res.message, 6000);
   });
@@ -287,6 +288,50 @@
     await api.dswebLogout();
     toast("已关闭网页版专用浏览器");
   });
+
+  $("btnDswebCheck").addEventListener("click", async (e) => {
+    const btn = e.target;
+    btn.disabled = true;
+    btn.textContent = "检查中…";
+    const res = await api.checkDswebStatus();
+    btn.disabled = false;
+    btn.textContent = "检查登录状态";
+    if (res.state === "logged-in") toast("✅ 已登录，可以正常使用网页版");
+    else if (res.state === "logged-out") toast("未登录。请点「登录网页版」在专用浏览器里完成登录", 5000);
+    else toast(res.message || "无法确认登录状态", 5000);
+  });
+
+  // 主进程推送：登录页打开后轮询探测，登录完成时提示
+  api.onDswebStatus &&
+    api.onDswebStatus((s) => {
+      if (!s) return;
+      if (s.state === "waiting") {
+        startLoginPolling();
+      } else if (s.state === "logged-in") {
+        stopLoginPolling();
+        toast("✅ DeepSeek 网页版登录成功", 5000);
+      }
+    });
+
+  let loginPollTimer = null;
+  function startLoginPolling() {
+    stopLoginPolling();
+    loginPollTimer = setInterval(async () => {
+      const res = await api.checkDswebStatus();
+      if (res.state === "logged-in") {
+        stopLoginPolling();
+        toast("✅ DeepSeek 网页版登录成功", 5000);
+      }
+    }, 4000);
+    // 5 分钟后自动停（避免用户一直不登录时空转）
+    setTimeout(stopLoginPolling, 300000);
+  }
+  function stopLoginPolling() {
+    if (loginPollTimer) {
+      clearInterval(loginPollTimer);
+      loginPollTimer = null;
+    }
+  }
 
   // ------------------------------------------------ 动作页
 
@@ -404,6 +449,130 @@
       });
     });
   }
+
+  // ------------------------------------------------ 生成记录页
+
+  let historyRecords = [];
+  let historySelectedId = "";
+  let historyLoadedOnce = false;
+
+  function fmtTime(ts) {
+    const d = new Date(ts);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getMonth() + 1}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  async function loadHistory() {
+    const res = await api.listHistory({ limit: 300 });
+    historyRecords = res.records || [];
+    renderHistoryList();
+    // 选中项被删除/清空后回退到第一条
+    if (historySelectedId && historyRecords.some((r) => r.id === historySelectedId)) {
+      await showHistoryDetail(historySelectedId);
+    } else if (historyRecords.length) {
+      await selectHistoryItem(historyRecords[0].id);
+    } else {
+      historySelectedId = "";
+      $("hdQuote").classList.add("hidden");
+      $("hdQuestion").classList.add("hidden");
+      $("hdBody").textContent = "还没有生成记录";
+      $("hdBody").classList.add("empty");
+    }
+    historyLoadedOnce = true;
+  }
+
+  function renderHistoryList() {
+    if (!historyRecords.length) {
+      $("historyList").innerHTML =
+        '<div class="item"><div class="item-body"><div class="item-meta">还没有生成记录</div></div></div>';
+      return;
+    }
+    $("historyList").innerHTML = historyRecords
+      .map(
+        (r) => `<button class="history-item" data-id="${esc(r.id)}">
+        <span class="history-item-top">
+          <span class="history-item-time">${fmtTime(r.ts)}</span>
+          ${r.saved ? '<span class="history-item-mark saved" title="已录入笔记">已录入</span>' : ""}
+          ${r.hasError ? '<span class="history-item-mark err" title="生成失败">失败</span>' : ""}
+          <span class="history-item-action">${esc(r.action || "生成")}</span>
+        </span>
+        <span class="history-item-preview${r.question ? " has-question" : ""}">${esc(r.question || r.selectionPreview || "")}</span>
+        <span class="history-item-preview">${esc(r.contentPreview || "")}</span>
+      </button>`
+      )
+      .join("");
+  }
+
+  async function selectHistoryItem(id) {
+    historySelectedId = id;
+    $("historyList")
+      .querySelectorAll(".history-item")
+      .forEach((el) => el.classList.toggle("active", el.dataset.id === id));
+    await showHistoryDetail(id);
+  }
+
+  async function showHistoryDetail(id) {
+    const rec = await api.getHistory({ id });
+    if (!rec) {
+      $("hdBody").textContent = "记录不存在（可能已被删除）";
+      $("hdBody").classList.add("empty");
+      return;
+    }
+    $("hdQuote").classList.toggle("hidden", !rec.selection);
+    $("hdQuote").textContent = rec.selection || "";
+    $("hdQuestion").classList.toggle("hidden", !rec.question);
+    $("hdQuestion").textContent = rec.question || "";
+    const body = $("hdBody");
+    body.classList.remove("empty");
+    // 失败记录：错误信息置顶显示，正文（若有）跟随其后
+    if (rec.error) {
+      body.textContent = `⚠️ ${rec.error}` + (rec.content ? "\n\n—— 已生成的部分 ——\n\n" + rec.content : "");
+      body.classList.add("empty");
+      return;
+    }
+    // 正文用 Markdown 渲染（与悬浮卡片同一渲染器；main.html 也引入 md.js）
+    body.innerHTML = window.HuaciMd ? window.HuaciMd.render(rec.content || "") : esc(rec.content || "");
+    if (!rec.content) body.textContent = "（无输出内容）";
+    // 元信息行（时间 / 来源 / 模型）
+    const meta = document.createElement("div");
+    meta.className = "hd-meta";
+    const t = new Date(rec.ts);
+    const pad = (n) => String(n).padStart(2, "0");
+    meta.textContent =
+      `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())} ` +
+      `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}` +
+      (rec.app ? ` · 来自 ${rec.app}` : "") +
+      (rec.provider ? ` · ${rec.provider}${rec.model ? " " + rec.model : ""}` : "");
+    body.prepend(document.createElement("br"));
+    body.prepend(meta);
+  }
+
+  $("historyList").addEventListener("click", (e) => {
+    const el = e.target.closest(".history-item");
+    if (el) void selectHistoryItem(el.dataset.id);
+  });
+
+  $("btnRefreshHistory").addEventListener("click", () => void loadHistory());
+
+  $("btnDeleteHistory").addEventListener("click", async () => {
+    if (!historySelectedId) return toast("未选择记录");
+    const res = await api.deleteHistory({ id: historySelectedId });
+    if (res.ok) {
+      toast("已删除");
+      historySelectedId = "";
+      await loadHistory();
+    } else {
+      toast("删除失败");
+    }
+  });
+
+  $("btnClearHistory").addEventListener("click", async () => {
+    if (!confirm("确定清空全部生成记录？此操作不可恢复。")) return;
+    const res = await api.clearHistory();
+    toast(`已清空 ${res.deleted ?? 0} 条`);
+    historySelectedId = "";
+    await loadHistory();
+  });
 
   // ------------------------------------------------ 启动
 

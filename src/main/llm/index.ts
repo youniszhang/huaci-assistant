@@ -4,7 +4,7 @@
 
 import { ApiConfig, ChatMessage, SYSTEM_PROMPT, chatWithFallback } from "./api";
 import { ResolvedProvider, DEFAULT_DSWEB_PORT } from "./types";
-import { connectDeepSeek, ask, checkLogin, killBrowser, ensureBrowser, newTab } from "./dsweb";
+import { connectDeepSeek, ask, checkLogin, killBrowser, ensureBrowser, newTab, openLoginPage, probeLoginStatus } from "./dsweb";
 
 export interface RunLlmOptions {
 	provider: ResolvedProvider;
@@ -132,5 +132,5 @@ export async function runLlm(opts: RunLlmOptions): Promise<RunLlmResult> {
 	return runApi(opts);
 }
 
-export { SYSTEM_PROMPT, checkLogin, killBrowser, ensureBrowser, newTab, connectDeepSeek };
+export { SYSTEM_PROMPT, checkLogin, killBrowser, ensureBrowser, newTab, connectDeepSeek, openLoginPage, probeLoginStatus };
 export type { ChatMessage } from "./api";

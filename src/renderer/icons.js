@@ -37,6 +37,9 @@
     target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
     message: '<path d="M21 12a8 8 0 01-8 8H7l-4 3v-6.5A8 8 0 0113 4a8 8 0 018 8z"/>',
     scan: '<path d="M4 8V6a2 2 0 012-2h2"/><path d="M16 4h2a2 2 0 012 2v2"/><path d="M20 16v2a2 2 0 01-2 2h-2"/><path d="M8 20H6a2 2 0 01-2-2v-2"/><path d="M4 12h16"/>',
+    // 生成记录（时钟回拨）
+    history:
+      '<path d="M3 12a9 9 0 109-9 9 9 0 00-7.5 4.2"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/>',
   };
 
   /**

@@ -17,9 +17,10 @@ import { OverlayWindow, OverlayPosition, RegionOverlay } from "./overlay";
 import { listVaults, loadProviders, pickVault, ProviderBundle } from "./obsidian";
 import { AppSettings, fillTemplate, loadSettings, saveSettings } from "./settings";
 import { listCaptures, readCapture, writeCapture, sanitizeBody, annotationTitle } from "./note";
-import { runLlm, SYSTEM_PROMPT, ChatMessage, ensureBrowser, killBrowser, connectDeepSeek, checkLogin } from "./llm";
+import { runLlm, SYSTEM_PROMPT, ChatMessage, ensureBrowser, killBrowser, connectDeepSeek, checkLogin, openLoginPage, probeLoginStatus } from "./llm";
 import { ResolvedProvider, DEFAULT_DSWEB_PORT } from "./llm/types";
 import { chatWithFallback, normalizeBaseURL } from "./llm/api";
+import { appendHistory, getHistory, listHistory, updateHistory, deleteHistory, clearHistory } from "./history";
 import { API } from "../shared/api.js";
 
 // shared/api.js 是 CommonJS 模块
@@ -135,11 +136,15 @@ interface Session {
 	running: boolean;
 	abort?: AbortController;
 	error?: string;
+	/** 最近一次生成对应的历史记录 id（用于「录入笔记」时回标 saved） */
+	historyId?: string;
 }
 let session: Session | null = null;
 let captureEnabled = true;
 let lastSelection = "";
 let lastSelectionAt = 0;
+/** 最近一次「手动取词」（快捷键/托盘/设置页触发）时间，autoPopup 关闭时用它放行手动划词 */
+let lastManualCaptureAt = 0;
 
 // ---------------------------------------------------------------- 配置
 
@@ -256,11 +261,14 @@ function rebuildTrayMenu(): void {
 			checked: captureEnabled,
 			click: (item) => setCaptureEnabled(item.checked),
 		},
-		{
-			label: "立即取词",
-			accelerator: settings.hotkeyCapture || undefined,
-			click: () => capture.requestCapture(),
+	{
+		label: "立即取词",
+		accelerator: settings.hotkeyCapture || undefined,
+		click: () => {
+			lastManualCaptureAt = Date.now();
+			capture.requestCapture();
 		},
+	},
 		{
 			label: "框选屏幕区域分析…",
 			accelerator: settings.hotkeyScan || undefined,
@@ -308,6 +316,9 @@ function selectionAnchor(x: number, y: number, h: number): OverlayPosition {
 
 capture.on("selection", (ev: SelectionEvent) => {
 	if (!captureEnabled) return;
+	// 拖动悬浮窗时 helper 会把鼠标拖拽当作「重新划词」并重发上一次的 selection，
+	// 会把刚拖走的窗口拽回选区锚点 —— 拖动期间（含结束后 600ms 冷却）直接忽略
+	if (overlay.isDragging()) return;
 	const text = ev.text.trim();
 	if (!text) return;
 	console.log(`[selection] app=${ev.app} len=${text.length} pos=(${Math.round(ev.x)},${Math.round(ev.y)}) text="${text.slice(0, 40)}"`);
@@ -315,8 +326,19 @@ capture.on("selection", (ev: SelectionEvent) => {
 	const now = Date.now();
 	if (text === lastSelection && now - lastSelectionAt < 1200) return;
 	if (text.length < 2) return;
+	// autoPopup=false（「划词后自动弹出工具条」关闭）：划词不再自动弹，
+	// 仅快捷键 / 托盘 / 设置页的手动「立即取词」触发（2s 内的 selection）才弹
+	if (!settings.autoPopup && now - lastManualCaptureAt > 2000) {
+		lastSelection = text;
+		lastSelectionAt = now;
+		console.log("[selection] autoPopup 已关闭，忽略非手动取词");
+		return;
+	}
 	lastSelection = text;
 	lastSelectionAt = now;
+
+	// 新选区到来 → 恢复「跟随锚点」模式（用户上一次的拖动位置只对上一轮会话生效）
+	overlay.resetUserPosition();
 
 	if (text.length > settings.maxSelectionChars) {
 		// 过长：截断并提示（仍可解释，只是内容不完整）
@@ -664,12 +686,39 @@ async function runAction(actionId: string, customText?: string): Promise<void> {
 			provider: provider.name,
 			model,
 		});
+		// 生成记录：无论是否录入笔记，输入/输出都留档（主窗口可回看）
+		const rec = appendHistory({
+			action: act.label,
+			actionId: act.id,
+			app: session.app || undefined,
+			provider: provider.name,
+			model,
+			selection: session.selection,
+			content: session.content,
+			thinking: session.thinking || undefined,
+		});
+		session.historyId = rec.id;
 	} catch (err) {
 		if (!session) return;
 		session.running = false;
 		const message = (err as Error).name === "AbortError" ? "已停止" : (err as Error).message;
 		session.error = message;
 		overlay.send(ch("overlay:error"), { message });
+		// 失败也留档（含已生成的部分内容），便于排查
+		if (session.content || message !== "已停止") {
+			const rec = appendHistory({
+				action: act.label,
+				actionId: act.id,
+				app: session.app || undefined,
+				provider: provider.name,
+				model,
+				selection: session.selection,
+				content: session.content,
+				thinking: session.thinking || undefined,
+				error: message,
+			});
+			session.historyId = rec.id;
+		}
 	}
 }
 
@@ -726,12 +775,38 @@ async function runFollowup(question: string): Promise<void> {
 			model,
 			question,
 		});
+		// 生成记录：追问轮次单独一条（question 为输入，content 为输出）
+		const rec = appendHistory({
+			action: "追问",
+			app: session.app || undefined,
+			provider: provider.name,
+			model,
+			selection: session.selection,
+			question,
+			content: session.content,
+			thinking: session.thinking || undefined,
+		});
+		session.historyId = rec.id;
 	} catch (err) {
 		if (!session) return;
 		session.running = false;
 		const message = (err as Error).name === "AbortError" ? "已停止" : (err as Error).message;
 		session.error = message;
 		overlay.send(ch("overlay:error"), { message });
+		if (session.content || message !== "已停止") {
+			const rec = appendHistory({
+				action: "追问",
+				app: session.app || undefined,
+				provider: provider.name,
+				model,
+				selection: session.selection,
+				question,
+				content: session.content,
+				thinking: session.thinking || undefined,
+				error: message,
+			});
+			session.historyId = rec.id;
+		}
 	}
 }
 
@@ -759,6 +834,8 @@ function saveSession(): { ok: boolean; file?: string; replaced?: boolean; messag
 			},
 			{ calloutType: settings.calloutType ?? bundle?.settings.calloutType ?? "note", dir: settings.captureDir }
 		);
+		// 关联的历史记录回标「已录入」
+		if (session.historyId) updateHistory(session.historyId, { saved: true });
 		return { ok: true, file: res.file, replaced: res.replaced };
 	} catch (err) {
 		return { ok: false, message: (err as Error).message };
@@ -784,6 +861,8 @@ function registerIpc(): void {
 	});
 
 	ipcMain.handle(ch("capture:request"), () => {
+		// 手动取词（设置页按钮）：autoPopup 关闭时也放行本次划词
+		lastManualCaptureAt = Date.now();
 		capture.requestCapture();
 		return true;
 	});
@@ -837,6 +916,12 @@ function registerIpc(): void {
 		cancelPendingToolbarHide();
 		overlay.setFocusable(false);
 		overlay.hide();
+		return true;
+	});
+
+	// JS 拖动：渲染层上报起止（phase = start | end），跟随在 overlay.drag() 内部
+	ipcMain.handle(ch("overlay:drag"), (_e, payload: { phase: string }) => {
+		overlay.drag(String(payload?.phase ?? ""));
 		return true;
 	});
 
@@ -934,12 +1019,12 @@ function registerIpc(): void {
 		const p = activeProvider();
 		const port = p?.ptype === "dsweb" ? p.dswebPort || DEFAULT_DSWEB_PORT : DEFAULT_DSWEB_PORT;
 		try {
-			killBrowser();
-			await ensureBrowser(port, false); // 可见窗口
-			const client = await connectDeepSeek(port, false);
-			client.close();
-			await shell.openExternal("https://chat.deepseek.com/sign_in");
-			return { ok: true, message: "已打开登录窗口，请在浏览器里完成登录（登录态会保存）" };
+			// 关键：必须在专用浏览器（aie-dsweb-profile）内打开登录页。
+			// 旧实现走 shell.openExternal 打开的是系统默认浏览器，登录态写进日常
+			// 浏览器 profile，CDP 专用 profile 读不到 → 「登录了但助手仍说未登录」。
+			await openLoginPage(port);
+			void notifyDswebStatus({ state: "waiting", message: "已在专用浏览器打开登录页，请完成登录" });
+			return { ok: true, message: "已在专用浏览器打开登录页，请在该窗口完成登录" };
 		} catch (err) {
 			return { ok: false, message: (err as Error).message };
 		}
@@ -947,8 +1032,31 @@ function registerIpc(): void {
 
 	ipcMain.handle(ch("config:dsweb-logout"), () => {
 		killBrowser();
+		void notifyDswebStatus({ state: "logged-out", message: "已关闭专用浏览器" });
 		return { ok: true };
 	});
+
+	// 登录态探测：后台（headless）连专用浏览器读登录状态并广播。
+	// 供设置页「登录网页版」后轮询确认（登录完成 → 提示成功）。
+	ipcMain.handle(ch("config:dsweb-status"), async () => {
+		const p = activeProvider();
+		const port = p?.ptype === "dsweb" ? p.dswebPort || DEFAULT_DSWEB_PORT : DEFAULT_DSWEB_PORT;
+		const res = await probeLoginStatus(port);
+		const status = res
+			? { state: res.loggedIn ? "logged-in" : "logged-out", ok: true }
+			: { state: "unknown", ok: false, message: "探测失败（专用浏览器未启动或网络不通）" };
+		void notifyDswebStatus(status);
+		return status;
+	});
+
+	/** 广播 DeepSeek 网页版登录状态到所有窗口 */
+	function notifyDswebStatus(status: { state: string; message?: string }): void {
+		for (const w of BrowserWindow.getAllWindows()) {
+			if (!w.isDestroyed()) {
+				w.webContents.send(ch("config:dsweb-status"), status);
+			}
+		}
+	}
 
 	// 应用设置
 	ipcMain.handle(ch("settings:get"), () => settings);
@@ -1005,6 +1113,24 @@ function registerIpc(): void {
 		await shell.openPath(file);
 		return { ok: true };
 	});
+
+	// 生成记录（本机历史：每次生成的输入/输出都留档，主窗口可回看）
+	ipcMain.handle(ch("history:list"), (_e, payload: { limit?: number } = {}) => {
+		return { records: listHistory(Number(payload?.limit) || 300) };
+	});
+
+	ipcMain.handle(ch("history:get"), (_e, payload: { id: string }) => {
+		const rec = getHistory(String(payload?.id ?? ""));
+		return rec ?? null;
+	});
+
+	ipcMain.handle(ch("history:delete"), (_e, payload: { id: string }) => {
+		return { ok: deleteHistory(String(payload?.id ?? "")) };
+	});
+
+	ipcMain.handle(ch("history:clear"), () => {
+		return { ok: true, deleted: clearHistory() };
+	});
 }
 
 // ---------------------------------------------------------------- 快捷键
@@ -1031,7 +1157,15 @@ function registerHotkey(): void {
 			return false;
 		}
 	};
-	registerOne(settings.hotkeyCapture, () => capture.requestCapture(), "立即取词");
+	registerOne(
+		settings.hotkeyCapture,
+		() => {
+			// 手动取词：autoPopup 关闭时也放行本次划词（见 capture.on("selection")）
+			lastManualCaptureAt = Date.now();
+			capture.requestCapture();
+		},
+		"立即取词"
+	);
 	registerOne(settings.hotkeyScan, () => void scanRegionAndAnalyze(), "框选分析");
 }
 

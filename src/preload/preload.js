@@ -32,6 +32,7 @@ const bridge = {
   abort: () => ipcRenderer.invoke(API["overlay:abort"]),
   saveToNote: (payload) => ipcRenderer.invoke(API["overlay:save"], payload),
   hideOverlay: () => ipcRenderer.invoke(API["overlay:hide"]),
+  dragOverlay: (phase) => ipcRenderer.invoke(API["overlay:drag"], { phase }),
   resizeOverlay: (payload) => ipcRenderer.invoke(API["overlay:resize"], payload),
   focusOverlay: (payload) => ipcRenderer.invoke(API["overlay:focus"], payload),
   openMain: () => ipcRenderer.invoke(API["overlay:open-main"]),
@@ -47,6 +48,14 @@ const bridge = {
   testProvider: (payload) => ipcRenderer.invoke(API["config:test-provider"], payload),
   dswebLogin: (payload) => ipcRenderer.invoke(API["config:dsweb-login"], payload),
   dswebLogout: () => ipcRenderer.invoke(API["config:dsweb-logout"]),
+  checkDswebStatus: () => ipcRenderer.invoke(API["config:dsweb-status"]),
+  onDswebStatus: (cb) => subscribe(API["config:dsweb-status"], cb),
+
+  // ---- 生成历史 ----
+  listHistory: (payload) => ipcRenderer.invoke(API["history:list"], payload),
+  getHistory: (payload) => ipcRenderer.invoke(API["history:get"], payload),
+  deleteHistory: (payload) => ipcRenderer.invoke(API["history:delete"], payload),
+  clearHistory: () => ipcRenderer.invoke(API["history:clear"]),
 
   // ---- 设置 ----
   getSettings: () => ipcRenderer.invoke(API["settings:get"]),

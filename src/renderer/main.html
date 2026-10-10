@@ -32,12 +32,15 @@
       <button class="nav-item" data-page="notes">
         <span data-icon="notebook" data-icon-class="ic ic-sm"></span>划词记录
       </button>
+      <button class="nav-item" data-page="history">
+        <span data-icon="history" data-icon-class="ic ic-sm"></span>生成记录
+      </button>
       <button class="nav-item" data-page="about">
         <span data-icon="info" data-icon-class="ic ic-sm"></span>关于
       </button>
     </nav>
     <div class="side-foot">
-      <span class="version">v0.1.0</span>
+      <span class="version">v0.1.1</span>
     </div>
   </aside>
 
@@ -184,6 +187,7 @@
       <div class="toolbar-row">
         <button class="btn" id="btnFollowPlugin">跟随插件设置</button>
         <button class="btn" id="btnDswebLogin">登录网页版</button>
+        <button class="btn quiet" id="btnDswebCheck">检查登录状态</button>
         <button class="btn quiet" id="btnDswebLogout">关闭浏览器</button>
         <span class="spacer"></span>
         <button class="btn quiet" id="btnRefreshProviders">刷新</button>
@@ -214,6 +218,30 @@
       <div class="notes-layout">
         <div class="list list-scroll" id="noteList"></div>
         <pre class="preview" id="notePreview">选择左侧文件查看内容</pre>
+      </div>
+    </section>
+
+    <!-- ---------- 生成记录 ---------- -->
+    <section class="page" id="page-history">
+      <header class="page-head">
+        <h1>生成记录</h1>
+        <p class="page-desc">每次生成的输入与输出在本机留档，仅存本机</p>
+      </header>
+      <div class="history-layout">
+        <div class="list list-scroll" id="historyList"></div>
+        <div class="history-detail" id="historyDetail">
+          <div class="history-detail-inner">
+            <div class="hd-quote hidden" id="hdQuote"></div>
+            <div class="hd-question hidden" id="hdQuestion"></div>
+            <div class="hd-body" id="hdBody">选择左侧记录查看完整内容</div>
+          </div>
+        </div>
+      </div>
+      <div class="toolbar-row" style="margin-top: var(--sp-3)">
+        <button class="btn quiet" id="btnDeleteHistory">删除此条</button>
+        <button class="btn quiet" id="btnClearHistory">清空全部</button>
+        <span class="spacer"></span>
+        <button class="btn quiet" id="btnRefreshHistory">刷新</button>
       </div>
     </section>
 
@@ -249,6 +277,7 @@
 </div>
 <div id="toast" class="toast hidden"></div>
 <script src="icons.js"></script>
+<script src="md.js"></script>
 <script src="mock-bridge.js"></script>
 <script src="main.js"></script>
 </body>
