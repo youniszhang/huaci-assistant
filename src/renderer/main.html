@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>划词助手</title>
+<link rel="stylesheet" href="tokens.css" />
+<link rel="stylesheet" href="main.css" />
+</head>
+<body>
+<div class="app">
+
+  <!-- ========== 侧栏 ========== -->
+  <aside class="side">
+    <div class="side-drag"></div>
+    <div class="brand">
+      <span class="brand-mark" data-icon="sparkles"></span>
+      <div class="brand-text">
+        <div class="brand-name">划词助手</div>
+        <div class="brand-sub" id="brandSub">检测中…</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <button class="nav-item active" data-page="status">
+        <span data-icon="activity" data-icon-class="ic ic-sm"></span>状态
+      </button>
+      <button class="nav-item" data-page="providers">
+        <span data-icon="plug" data-icon-class="ic ic-sm"></span>供应商
+      </button>
+      <button class="nav-item" data-page="actions">
+        <span data-icon="wand" data-icon-class="ic ic-sm"></span>动作
+      </button>
+      <button class="nav-item" data-page="notes">
+        <span data-icon="notebook" data-icon-class="ic ic-sm"></span>划词记录
+      </button>
+      <button class="nav-item" data-page="about">
+        <span data-icon="info" data-icon-class="ic ic-sm"></span>关于
+      </button>
+    </nav>
+    <div class="side-foot">
+      <span class="version">v0.1.0</span>
+    </div>
+  </aside>
+
+  <!-- ========== 内容区 ========== -->
+  <main class="main" id="main">
+
+    <!-- ---------- 状态 ---------- -->
+    <section class="page active" id="page-status">
+      <header class="page-head">
+        <h1>状态</h1>
+        <p class="page-desc">划词监听、权限与工作环境</p>
+      </header>
+
+      <!-- 主状态横幅 -->
+      <div class="hero" id="hero">
+        <span class="hero-pulse" id="heroPulse"></span>
+        <div class="hero-text">
+          <div class="hero-title" id="heroTitle">划词监听已开启</div>
+          <div class="hero-sub" id="heroSub">选中文字即弹出工具条</div>
+        </div>
+        <button class="btn quiet btn-tiny" id="btnCaptureNow">立即取词</button>
+        <button class="btn quiet btn-tiny" id="btnScanNow">框选分析</button>
+        <label class="switch">
+          <input type="checkbox" id="toggleCapture" checked />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </label>
+      </div>
+
+      <h2 class="section-title">运行环境</h2>
+      <div class="rows">
+        <div class="row-item">
+          <span class="row-icon" id="rowIconCapture" data-icon="activity" data-icon-class="ic ic-sm"></span>
+          <div class="row-main">
+            <div class="row-label">划词捕获</div>
+            <div class="row-detail mono" id="stCaptureHint"></div>
+          </div>
+          <div class="row-value" id="stCapture">—</div>
+        </div>
+
+        <div class="row-item">
+          <span class="row-icon" id="rowIconPerm" data-icon="check" data-icon-class="ic ic-sm"></span>
+          <div class="row-main">
+            <div class="row-label">辅助功能</div>
+            <div class="row-detail">读取选中文字，未授权则划词失效</div>
+          </div>
+          <div class="row-value" id="stPerm">—</div>
+          <button class="btn quiet btn-tiny" id="btnPerm">设置</button>
+        </div>
+
+        <div class="row-item">
+          <span class="row-icon" id="rowIconInput" data-icon="marker" data-icon-class="ic ic-sm"></span>
+          <div class="row-main">
+            <div class="row-label">输入监控</div>
+            <div class="row-detail">识别划词动作，Electron 应用（Obsidian / Chrome）必需</div>
+          </div>
+          <div class="row-value" id="stInputMon">—</div>
+          <button class="btn quiet btn-tiny" id="btnInputMon">设置</button>
+        </div>
+
+        <div class="row-item">
+          <span class="row-icon" data-icon="scan" data-icon-class="ic ic-sm"></span>
+          <div class="row-main">
+            <div class="row-label">屏幕录制</div>
+            <div class="row-detail">框选聊天记录 / 图片 / PDF 分析时必需</div>
+          </div>
+          <div class="row-value" id="stScreenRec">—</div>
+          <button class="btn quiet btn-tiny" id="btnScreenRec">设置</button>
+        </div>
+      </div>
+
+      <h2 class="section-title">
+        供应商
+        <button class="btn quiet btn-tiny section-action" id="btnTestProvider">测试连通</button>
+      </h2>
+      <div class="rows">
+        <div class="row-item row-emphasis">
+          <span class="row-icon accent" data-icon="plug" data-icon-class="ic ic-sm"></span>
+          <div class="row-main">
+            <div class="row-label" id="stProvider">—</div>
+            <div class="row-detail" id="stProviderHint"></div>
+          </div>
+        </div>
+      </div>
+
+      <h2 class="section-title">
+        笔记库
+        <span class="section-actions">
+          <button class="btn quiet btn-tiny" id="btnOpenDir">打开</button>
+          <button class="btn quiet btn-tiny" id="btnPickVault">更换</button>
+        </span>
+      </h2>
+      <div class="rows">
+        <div class="row-item">
+          <span class="row-icon" data-icon="notebook" data-icon-class="ic ic-sm"></span>
+          <div class="row-main">
+            <div class="row-label" id="stVault">—</div>
+            <div class="row-detail mono" id="stVaultHint"></div>
+          </div>
+        </div>
+      </div>
+
+      <h2 class="section-title">偏好</h2>
+      <div class="rows">
+        <div class="row-item">
+          <div class="row-main">
+            <div class="row-label">取词快捷键</div>
+            <div class="row-detail">选中文字后按下即取词，留空则不注册</div>
+          </div>
+          <input type="text" class="row-input" id="inHotkey" placeholder="未设置" />
+        </div>
+        <div class="row-item">
+          <div class="row-main">
+            <div class="row-label">框选分析快捷键</div>
+            <div class="row-detail">按下后拖拽框选屏幕区域，OCR 识别并分析（聊天/图片/PDF）</div>
+          </div>
+          <input type="text" class="row-input" id="inHotkeyScan" placeholder="未设置" />
+        </div>
+        <label class="row-item row-clickable">
+          <div class="row-main">
+            <div class="row-label">划词后自动弹出工具条</div>
+            <div class="row-detail">关闭后只能用快捷键触发</div>
+          </div>
+          <input type="checkbox" class="row-check" id="inAutoPopup" checked />
+        </label>
+        <label class="row-item row-clickable">
+          <div class="row-main">
+            <div class="row-label">DeepSeek 网页版后台运行</div>
+            <div class="row-detail">不弹出浏览器窗口，适合日常使用</div>
+          </div>
+          <input type="checkbox" class="row-check" id="inHeadless" checked />
+        </label>
+      </div>
+    </section>
+
+    <!-- ---------- 供应商 ---------- -->
+    <section class="page" id="page-providers">
+      <header class="page-head">
+        <h1>供应商</h1>
+        <p class="page-desc">
+          读取 Obsidian <code>ai-explainer</code> 插件的配置，自动同步
+        </p>
+      </header>
+      <div class="list" id="providerList"></div>
+      <div class="toolbar-row">
+        <button class="btn" id="btnFollowPlugin">跟随插件设置</button>
+        <button class="btn" id="btnDswebLogin">登录网页版</button>
+        <button class="btn quiet" id="btnDswebLogout">关闭浏览器</button>
+        <span class="spacer"></span>
+        <button class="btn quiet" id="btnRefreshProviders">刷新</button>
+      </div>
+      <p class="foot-note mono" id="providerHint"></p>
+    </section>
+
+    <!-- ---------- 动作 ---------- -->
+    <section class="page" id="page-actions">
+      <header class="page-head">
+        <h1>动作</h1>
+        <p class="page-desc">工具条按钮与提问模板，<code>{{selection}}</code> 替换为选中内容</p>
+      </header>
+      <div class="list" id="actionList"></div>
+      <div class="toolbar-row">
+        <button class="btn" id="btnAddAction">新增动作</button>
+        <span class="spacer"></span>
+        <button class="btn primary" id="btnSaveActions">保存</button>
+      </div>
+    </section>
+
+    <!-- ---------- 划词记录 ---------- -->
+    <section class="page" id="page-notes">
+      <header class="page-head">
+        <h1>划词记录</h1>
+        <p class="page-desc mono" id="notesDir">04-日常记录/AI划词解释</p>
+      </header>
+      <div class="notes-layout">
+        <div class="list list-scroll" id="noteList"></div>
+        <pre class="preview" id="notePreview">选择左侧文件查看内容</pre>
+      </div>
+    </section>
+
+    <!-- ---------- 关于 ---------- -->
+    <section class="page" id="page-about">
+      <header class="page-head">
+        <h1>关于</h1>
+        <p class="page-desc">系统级划词解释，结果一键录入 Obsidian</p>
+      </header>
+      <div class="rows">
+        <div class="row-item">
+          <div class="row-main">
+            <div class="row-label">任意应用选中文字</div>
+            <div class="row-detail">浮出工具条 → 解释 / 翻译 / 总结 → 追问 → 录入笔记</div>
+          </div>
+        </div>
+        <div class="row-item">
+          <div class="row-main">
+            <div class="row-label">供应商配置与插件共用</div>
+            <div class="row-detail">三方中转 / 官方 API / DeepSeek 网页版（免 Key）</div>
+          </div>
+        </div>
+        <div class="row-item">
+          <div class="row-main">
+            <div class="row-label">划词捕获</div>
+            <div class="row-detail mono" id="aboutEnv"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+<div id="toast" class="toast hidden"></div>
+<script src="icons.js"></script>
+<script src="mock-bridge.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

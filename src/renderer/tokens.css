@@ -1,0 +1,261 @@
+/* ============================================================
+ * 设计令牌 —— 悬浮窗与主窗口共用
+ *
+ * 原则：
+ *   1. 间距全部落在 4px 栅格上（4/8/12/16/20/24），不出现 14、13.5 这类手写值
+ *   2. 字号只留 4 档（11/12/13/15），字重只留 3 档（400/500/590）
+ *   3. 圆角只留 3 档：弹窗 10 / 控件 6 / 小标签 5
+ *   4. 颜色走语义命名，不写死色值；强调色只用一处（Apple 系统蓝）
+ *   5. 阴影用三层叠加（描边层 + 近距 + 远距），这是 macOS 原生弹窗的做法
+ * ============================================================ */
+
+:root {
+  /* 间距 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+
+  /* 圆角 */
+  --r-popover: 10px;
+  --r-button: 6px;
+  --r-chip: 5px;
+
+  /* 字号 / 字重 */
+  --fs-caption: 11px;
+  --fs-small: 12px;
+  --fs-body: 13px;
+  --fs-title: 15px;
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semibold: 590;
+
+  /* 行高 */
+  --lh-tight: 1.35;
+  --lh-normal: 1.55;
+  --lh-loose: 1.7;
+
+  /* ---- 亮色 ---- */
+  --c-bg: #ffffff;
+  --c-bg-sunken: #f5f5f7;
+  --c-bg-panel: #ffffff;
+  --c-fill: rgba(0, 0, 0, 0.05);
+  --c-fill-hover: rgba(0, 0, 0, 0.08);
+  --c-separator: rgba(0, 0, 0, 0.09);
+  --c-text: #1d1d1f;
+  --c-text-2: #6e6e73;
+  --c-text-3: #8e8e93;
+  --c-accent: #0071e3;
+  --c-accent-hover: #0077ed;
+  --c-accent-soft: rgba(0, 113, 227, 0.10);
+  --c-danger: #d70015;
+  --c-danger-soft: rgba(215, 0, 21, 0.08);
+
+  /* ---- 阴影：三层叠加 ---- */
+  --shadow-popover:
+    0 0 0 0.5px rgba(0, 0, 0, 0.05),
+    0 3px 8px rgba(0, 0, 0, 0.10),
+    0 10px 28px rgba(0, 0, 0, 0.14);
+  --shadow-card:
+    0 0 0 0.5px rgba(0, 0, 0, 0.04),
+    0 1px 3px rgba(0, 0, 0, 0.06),
+    0 6px 20px rgba(0, 0, 0, 0.08);
+
+  /* 动效 */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur: 140ms;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-bg: #2c2c2e;
+    --c-bg-sunken: #1c1c1e;
+    --c-bg-panel: #2c2c2e;
+    --c-fill: rgba(255, 255, 255, 0.08);
+    --c-fill-hover: rgba(255, 255, 255, 0.14);
+    --c-separator: rgba(255, 255, 255, 0.10);
+    --c-text: #f5f5f7;
+    --c-text-2: #a1a1a6;
+    --c-text-3: #8e8e93;
+    --c-accent: #0a84ff;
+    --c-accent-hover: #409cff;
+    --c-accent-soft: rgba(10, 132, 255, 0.18);
+    --c-danger: #ff453a;
+    --c-danger-soft: rgba(255, 69, 58, 0.14);
+
+    --shadow-popover:
+      0 0 0 0.5px rgba(255, 255, 255, 0.08),
+      0 3px 8px rgba(0, 0, 0, 0.45),
+      0 10px 28px rgba(0, 0, 0, 0.55);
+    --shadow-card:
+      0 0 0 0.5px rgba(255, 255, 255, 0.06),
+      0 1px 3px rgba(0, 0, 0, 0.4),
+      0 6px 20px rgba(0, 0, 0, 0.45);
+  }
+}
+
+/* ---- 基础 ---- */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+  font-size: var(--fs-body);
+  line-height: var(--lh-normal);
+  color: var(--c-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---- 滚动条：默认隐形，滚动/悬停才浮现（贴近 macOS 原生） ---- */
+
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 100px;
+  transition: background 200ms ease;
+}
+/* 悬停在可滚动区域时，滑块淡入 */
+:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.38);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+@media (prefers-color-scheme: dark) {
+  :hover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.22);
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.38);
+    background-clip: content-box;
+  }
+}
+
+/* 输入类控件内不显示滚动条轨道（避免文本框里出现刺眼的条） */
+textarea::-webkit-scrollbar,
+input::-webkit-scrollbar {
+  width: 8px;
+}
+textarea::-webkit-scrollbar-thumb,
+input::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+textarea:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.16);
+  background-clip: content-box;
+}
+@media (prefers-color-scheme: dark) {
+  textarea:hover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    background-clip: content-box;
+  }
+}
+
+/* ---- 图标：统一 1.5px 细线，跟随 currentColor ---- */
+
+.ic {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  vertical-align: -2px;
+}
+.ic-sm {
+  width: 13px;
+  height: 13px;
+}
+
+/* ---- 通用控件 ---- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 28px;
+  padding: 0 var(--sp-3);
+  font-family: inherit;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  color: var(--c-text);
+  background: var(--c-fill);
+  border: none;
+  border-radius: var(--r-button);
+  cursor: default;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+  white-space: nowrap;
+}
+.btn:hover {
+  background: var(--c-fill-hover);
+}
+.btn:active {
+  transform: scale(0.985);
+}
+.btn:disabled {
+  opacity: 0.4;
+}
+.btn:disabled:hover {
+  background: var(--c-fill);
+}
+
+.btn.primary {
+  color: #fff;
+  background: var(--c-accent);
+}
+.btn.primary:hover {
+  background: var(--c-accent-hover);
+}
+
+.btn.quiet {
+  background: transparent;
+}
+.btn.quiet:hover {
+  background: var(--c-fill);
+}
+
+.btn.icon-only {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+}
+
+/* 焦点可见性（键盘导航） */
+:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
+  border-radius: var(--r-button);
+}
+
+/* 隐藏只读文本的选择 */
+.no-select {
+  user-select: none;
+}

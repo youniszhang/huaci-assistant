@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: transparent; width: 1024px; height: 1024px; }
+  .canvas {
+    width: 1024px; height: 1024px;
+    display: grid; place-items: center;
+    background: transparent;
+  }
+  /* macOS Big Sur 图标规格：824×824 圆角矩形，圆角半径 185.4 */
+  .squircle {
+    width: 824px; height: 824px;
+    border-radius: 185.4px;
+    display: grid; place-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .glyph { position: relative; z-index: 2; }
+</style>
+</head>
+<body>
+<div class="canvas" id="canvas"></div>
+<script>
+const VARIANTS = {
+  // A：选中文字 + 星光（最直白：三行文字，中间一行被选中）
+  A: () => `
+    <div class="squircle" style="background: linear-gradient(160deg, #4F8DFF 0%, #2B5CE6 55%, #1D3FC4 100%);">
+      <div class="glyph" style="display:flex;flex-direction:column;gap:52px;align-items:flex-start;">
+        <div style="width:300px;height:46px;border-radius:23px;background:rgba(255,255,255,.55)"></div>
+        <div style="position:relative;display:flex;align-items:center;">
+          <div style="position:absolute;left:-24px;right:-70px;top:-18px;bottom:-18px;border-radius:14px;background:rgba(255,255,255,.22)"></div>
+          <div style="position:relative;width:430px;height:46px;border-radius:23px;background:#fff"></div>
+        </div>
+        <div style="width:230px;height:46px;border-radius:23px;background:rgba(255,255,255,.55)"></div>
+      </div>
+      <svg style="position:absolute;right:120px;top:110px;width:150px;height:150px" viewBox="0 0 24 24" fill="#fff">
+        <path d="M12 2l2.2 5.6L20 9.8l-5.8 2.2L12 17.6l-2.2-5.6L4 9.8l5.8-2.2L12 2z"/>
+        <path d="M19.5 15.5l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9.9-2.3z" opacity=".9"/>
+      </svg>
+    </div>`,
+
+  // B：荧光笔 + 星光
+  B: () => `
+    <div class="squircle" style="background: linear-gradient(160deg, #5B8DEF 0%, #3A63E0 55%, #2742B8 100%);">
+      <svg class="glyph" style="width:520px;height:520px" viewBox="0 0 24 24" fill="none"
+           stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 11l-6 6v3h3l6-6" stroke-width="1.6"/>
+        <path d="M13.7 4.3l6 6-7.1 7.1a2 2 0 01-1.4.6H9v-2.2a2 2 0 01.6-1.4l7.1-7.1z" fill="rgba(255,255,255,.92)" stroke="none"/>
+        <path d="M12 6l6 6" stroke="rgba(58,99,224,.55)" stroke-width="1.2"/>
+        <path d="M2.5 20.5h19" stroke="rgba(255,255,255,.5)" stroke-width="1.6"/>
+      </svg>
+      <svg style="position:absolute;right:118px;bottom:120px;width:140px;height:140px" viewBox="0 0 24 24" fill="#fff">
+        <path d="M12 2l2.2 5.6L20 9.8l-5.8 2.2L12 17.6l-2.2-5.6L4 9.8l5.8-2.2L12 2z"/>
+      </svg>
+    </div>`,
+
+  // C：文字光标 + 星光（选中态的最小表达）
+  C: () => `
+    <div class="squircle" style="background: linear-gradient(160deg, #6B9BFF 0%, #3567EA 50%, #1A38AF 100%);">
+      <div class="glyph" style="display:flex;flex-direction:column;gap:40px;align-items:center;">
+        <div style="display:flex;gap:26px;align-items:center;">
+          <div style="width:72px;height:290px;border-radius:36px;background:#fff"></div>
+          <div style="display:flex;flex-direction:column;gap:36px;">
+            <div style="width:250px;height:42px;border-radius:21px;background:rgba(255,255,255,.6)"></div>
+            <div style="width:190px;height:42px;border-radius:21px;background:rgba(255,255,255,.6)"></div>
+            <div style="width:230px;height:42px;border-radius:21px;background:rgba(255,255,255,.6)"></div>
+          </div>
+        </div>
+      </div>
+      <svg style="position:absolute;right:112px;top:104px;width:156px;height:156px" viewBox="0 0 24 24" fill="#fff">
+        <path d="M12 2l2.2 5.6L20 9.8l-5.8 2.2L12 17.6l-2.2-5.6L4 9.8l5.8-2.2L12 2z"/>
+        <path d="M19.5 15.5l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9.9-2.3z" opacity=".85"/>
+      </svg>
+    </div>`,
+
+  // D：深色底 + 高亮条（克制、专业）
+  D: () => `
+    <div class="squircle" style="background: linear-gradient(180deg, #2C2C31 0%, #1B1B20 100%);">
+      <div class="glyph" style="display:flex;flex-direction:column;gap:46px;width:520px;">
+        <div style="width:330px;height:44px;border-radius:22px;background:rgba(255,255,255,.32)"></div>
+        <div style="position:relative;height:44px;display:flex;align-items:center">
+          <div style="position:absolute;left:-26px;width:560px;height:88px;border-radius:20px;background:rgba(10,132,255,.30);top:-22px"></div>
+          <div style="position:relative;width:100%;height:44px;border-radius:22px;background:#fff"></div>
+        </div>
+        <div style="width:250px;height:44px;border-radius:22px;background:rgba(255,255,255,.32)"></div>
+      </div>
+      <svg style="position:absolute;right:116px;top:112px;width:150px;height:150px" viewBox="0 0 24 24" fill="#0A84FF">
+        <path d="M12 2l2.2 5.6L20 9.8l-5.8 2.2L12 17.6l-2.2-5.6L4 9.8l5.8-2.2L12 2z"/>
+      </svg>
+    </div>`,
+
+  // E：纯符号（文字线 + 星，无边框感，最简）
+  E: () => `
+    <div class="squircle" style="background: linear-gradient(155deg, #7DB0FF 0%, #4A7BF7 45%, #2B4FD8 100%);">
+      <div class="glyph" style="position:relative;display:flex;flex-direction:column;gap:56px;align-items:center;">
+        <div style="display:flex;flex-direction:column;gap:56px;align-items:flex-start">
+          <div style="display:flex;align-items:center;gap:34px">
+            <div style="width:52px;height:52px;border-radius:26px;background:rgba(255,255,255,.9)"></div>
+            <div style="width:290px;height:52px;border-radius:26px;background:rgba(255,255,255,.45)"></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:34px">
+            <div style="width:52px;height:52px;border-radius:26px;background:rgba(255,255,255,.9)"></div>
+            <div style="width:290px;height:52px;border-radius:26px;background:#fff"></div>
+          </div>
+        </div>
+      </div>
+      <svg style="position:absolute;right:130px;bottom:132px;width:132px;height:132px" viewBox="0 0 24 24" fill="#fff">
+        <path d="M12 2l2.2 5.6L20 9.8l-5.8 2.2L12 17.6l-2.2-5.6L4 9.8l5.8-2.2L12 2z"/>
+      </svg>
+    </div>`,
+};
+
+const name = new URLSearchParams(location.search).get('v') || 'A';
+document.getElementById('canvas').innerHTML = VARIANTS[name]();
+</script>
+</body>
+</html>

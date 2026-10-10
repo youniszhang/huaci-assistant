@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>划词助手</title>
+<link rel="stylesheet" href="tokens.css" />
+<link rel="stylesheet" href="overlay.css" />
+</head>
+<body>
+<div id="root" class="mode-toolbar">
+
+  <!-- ========== 工具条 ========== -->
+  <div id="toolbar" class="toolbar">
+    <button class="tb-scan" id="btnScan" title="框选屏幕区域分析（聊天/图片/PDF）">
+      <span data-icon="scan" data-icon-class="ic"></span>
+    </button>
+    <span class="tb-quote" id="tbQuote" title="点按查看全文"></span>
+    <span class="tb-divider"></span>
+    <div class="tb-actions" id="tbActions"></div>
+    <button class="tb-close" id="btnTbClose" title="关闭">
+      <span data-icon="close" data-icon-class="ic ic-sm"></span>
+    </button>
+  </div>
+
+  <!-- ========== 结果卡片 ========== -->
+  <div id="card" class="card hidden">
+    <header class="card-head">
+      <span class="head-icon" id="headIcon" data-icon="sparkles"></span>
+      <span class="head-title" id="actionLabel">解释</span>
+      <span class="head-meta" id="providerLabel"></span>
+      <span class="head-spacer"></span>
+      <button class="icon-btn" id="btnStop" title="停止生成">
+        <span data-icon="stop" data-icon-class="ic ic-sm"></span>
+      </button>
+      <button class="icon-btn" id="btnClose" title="关闭 (Esc)">
+        <span data-icon="close" data-icon-class="ic ic-sm"></span>
+      </button>
+    </header>
+
+    <button class="quote" id="quote" title="点按展开 / 收起原文"></button>
+
+    <div class="thinking hidden" id="thinkingWrap">
+      <button class="thinking-head" id="thinkingToggle">
+        <span class="thinking-chevron" data-icon="chevronRight" data-icon-class="ic ic-sm"></span>
+        <span class="thinking-icon" data-icon="bulb" data-icon-class="ic ic-sm"></span>
+        <span id="thinkingLabel">思考过程</span>
+      </button>
+      <div class="thinking-body hidden" id="thinkingBody"></div>
+    </div>
+
+    <div class="body" id="body"></div>
+
+    <div class="err hidden" id="err"></div>
+
+    <footer class="card-foot">
+      <button class="btn primary" id="btnSave">
+        <span data-icon="download" data-icon-class="ic ic-sm"></span>录入笔记
+      </button>
+      <button class="btn quiet" id="btnCopy">
+        <span data-icon="copy" data-icon-class="ic ic-sm"></span>复制
+      </button>
+      <span class="foot-spacer"></span>
+      <button class="btn quiet icon-only" id="btnRetry" title="重新生成">
+        <span data-icon="refresh" data-icon-class="ic ic-sm"></span>
+      </button>
+    </footer>
+
+    <div class="ask">
+      <textarea id="askInput" rows="1" placeholder="继续追问…"></textarea>
+      <button class="ask-send" id="btnSend" title="发送 (Enter)">
+        <span data-icon="send" data-icon-class="ic ic-sm"></span>
+      </button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+</div>
+<script src="icons.js"></script>
+<script src="mock-bridge.js"></script>
+<script src="overlay.js"></script>
+</body>
+</html>

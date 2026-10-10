@@ -1,0 +1,71 @@
+{
+  "name": "huaci-assistant",
+  "productName": "划词助手",
+  "version": "0.1.0",
+  "description": "系统级划词解释助手：任意应用划词 → AI 流式解释 → 一键录入 Obsidian 笔记（API/key 与 obsidian-ai-explainer 插件共用）",
+  "main": "dist/main/main.js",
+  "author": "youniszhang",
+  "license": "MIT",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "dev": "node esbuild.config.mjs --watch",
+    "start": "npm run build && electron .",
+    "helper": "bash swift/build.sh",
+    "test:api": "node scripts/test-api.js",
+    "test:dsweb": "node scripts/test-dsweb.js",
+    "test:note": "node scripts/test-note.js",
+    "pack": "bash scripts/build-macos.sh",
+    "pack:dmg": "bash scripts/build-macos.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.20.2",
+    "typescript": "^5.4.5"
+  },
+  "build": {
+    "appId": "com.youniszhang.huaci",
+    "productName": "划词助手",
+    "copyright": "Copyright © 2026 youniszhang",
+    "asar": true,
+    "artifactName": "HuaCiAssistant-${version}-${arch}.dmg",
+    "files": [
+      "dist/main/**/*",
+      "dist/preload/**/*",
+      "dist/renderer/**/*",
+      "dist/shared/**/*",
+      "!**/*.map"
+    ],
+    "extraResources": [
+      {
+        "from": "bin/SelectionHelper",
+        "to": "bin/SelectionHelper"
+      }
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "identity": "Grok Register Local",
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "用于读取划选文本并写入你的 Obsidian 笔记库。",
+        "LSUIElement": false
+      }
+    },
+    "dmg": {
+      "title": "划词助手 ${version}",
+      "window": {
+        "width": 560,
+        "height": 400
+      }
+    }
+  }
+}

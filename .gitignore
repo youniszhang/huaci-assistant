@@ -1,0 +1,17 @@
+# 依赖与构建产物（不入库，clone 后按 README 重新构建）
+node_modules/
+dist/
+bin/
+build/
+
+# 日志与系统文件
+*.log
+.DS_Store
+
+# 凭证类文件保险（不应出现，兜底防止误提交）
+.env
+.env.*
+*.pem
+*.key
+*credential*
+*secret*

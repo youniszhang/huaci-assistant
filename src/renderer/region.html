@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    background: transparent;
+    overflow: hidden;
+    -webkit-user-select: none;
+  }
+  #dim {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.22);
+  }
+  #hole {
+    position: fixed;
+    border: 2px solid #0a84ff;
+    border-radius: 4px;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.22), 0 0 12px rgba(10, 132, 255, 0.5);
+    background: transparent;
+    display: none;
+  }
+  #hint {
+    position: fixed;
+    left: 50%; top: 40px;
+    transform: translateX(-50%);
+    padding: 7px 16px;
+    font: 500 13px/1.4 -apple-system, "PingFang SC", sans-serif;
+    color: #fff;
+    background: rgba(30, 30, 32, 0.9);
+    border-radius: 100px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    white-space: nowrap;
+    backdrop-filter: blur(10px);
+  }
+  #size {
+    position: fixed;
+    padding: 3px 7px;
+    font: 500 11px/1 ui-monospace, Menlo, monospace;
+    color: #fff;
+    background: #0a84ff;
+    border-radius: 4px;
+    display: none;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div id="dim" style="display:none"></div>
+<div id="hole"></div>
+<div id="hint">拖动鼠标框选要分析的区域 · 按 Esc 取消</div>
+<div id="size"></div>
+<script>
+  const { ipcRenderer } = require("electron");
+  const hole = document.getElementById('hole');
+  const sizeTag = document.getElementById('size');
+
+  function setRegion(r) {
+    if (!r || r.w <= 0 || r.h <= 0) {
+      hole.style.display = 'none';
+      sizeTag.style.display = 'none';
+      return;
+    }
+    hole.style.display = 'block';
+    hole.style.left = r.x + 'px';
+    hole.style.top = r.y + 'px';
+    hole.style.width = r.w + 'px';
+    hole.style.height = r.h + 'px';
+
+    sizeTag.style.display = 'block';
+    sizeTag.textContent = Math.round(r.w) + ' × ' + Math.round(r.h);
+    let lx = r.x + r.w + 8;
+    let ly = r.y + r.h + 8;
+    if (lx + 76 > window.innerWidth) lx = r.x + r.w - 76;
+    if (ly + 22 > window.innerHeight) ly = r.y + r.h - 26;
+    sizeTag.style.left = Math.max(4, lx) + 'px';
+    sizeTag.style.top = Math.max(4, ly) + 'px';
+  }
+
+  ipcRenderer.on('region:update', (_e, rect) => setRegion(rect));
+</script>
+</body>
+</html>
