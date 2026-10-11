@@ -17,12 +17,16 @@
 
 ![解释结果卡片](docs/screenshots/overlay-card.png)
 
-主窗口（状态 / 供应商 / 动作 / 划词记录 / 关于）：
+主窗口（状态 / 供应商 / 动作 / 划词记录 / 生成记录 / 关于）：
 
 | 状态 | 供应商 |
 |---|---|
 | ![状态页](docs/screenshots/main-status.png) | ![供应商页](docs/screenshots/main-providers.png) |
 | ![动作页](docs/screenshots/main-actions.png) | ![划词记录页](docs/screenshots/main-notes.png) |
+
+生成记录页（左侧每次生成的留档，右侧 Markdown 渲染的完整内容与元信息）：
+
+![生成记录页](docs/screenshots/main-history.png)
 
 > 截图为 UI 示意（示例数据），实际内容取决于你的配置。
 
@@ -45,11 +49,13 @@
 
 - **划词即用**：鼠标拖拽选取、`Cmd+A` 全选、`Shift+方向键` 扩展选择，都会浮出工具条（不抢焦点，原应用照常操作）
 - **工具条跟随选区**：工具条浮出的前提是存在选中文本——点击别处、切换应用、取消选择后自动收起；结果卡片是主动点开的工作面板，阅读/追问/录入期间保持打开，点 ✕ 才收起
+- **工具条与卡片可拖动**：按住工具条任意空白处（卡片按住标题栏）拖到屏幕任意位置；拖动后位置固定，重新划词才回到选区旁。不用 `-webkit-app-region`（透明窗口上不稳定且会吞掉按钮点击），全部走 JS 实现
 - **五种动作**：解释 / 翻译 / 总结 / **意图分析** / **拟回复**，提示词可随意改，也能新增自定义动作
 - **框选分析（聊天/图片/PDF）**：按下 `Cmd+Shift+S` 拖拽框选任意屏幕区域 → 本地 OCR 识别文字 → 分析。**微信、钉钉等不暴露系统接口的聊天工具也能用**
-- **流式输出 + 思考过程**：推理型模型的 `reasoning_content` 折叠展示，正文边生成边渲染
+- **流式输出 + 思考过程**：推理型模型的 `reasoning_content` 折叠展示，正文边生成边渲染；GFM 表格、代码块、公式正常渲染
 - **追问**：结果卡片底部可直接追问，多轮对话保持上下文
 - **一键录入笔记**：写入 `<vault>/04-日常记录/AI划词解释/YYYY-MM-DD.md`，格式与插件 callout 一致；同一段文字重复解释会**覆盖同条目**而不是堆重复
+- **生成记录**：每次生成（含追问与失败）的输入输出都落盘本机（`userData/history/`），主窗口「生成记录」页可回看完整正文、删除或清空；已录入笔记的条目带「已录入」标记
 - **多供应商**：三方 OpenAI 兼容 API（aitry / 智谱 / DeepSeek 官方…）+ DeepSeek 网页版（免 Key，复用插件已登录的专用浏览器）
 - **托盘常驻，不打扰**：启动不弹主窗口，后台通过菜单栏图标操作（开/关划词监听、立即取词、框选分析、打开收集目录、打开主窗口）；仅「辅助功能」未授权时静默弹一次引导页
 
@@ -110,6 +116,17 @@ npm start                              # 启动
 2. 选区旁浮出工具条 → 点「解释 / 翻译 / 总结」
 3. 卡片流式显示答案；底部可「录入笔记」「复制」「重试」，输入框可继续追问
 4. 工具条跟随选区：点别处 / 切换应用自动收起；点「解释」等动作后卡片打开，卡片不随点击别处消失，点 ✕ 主动收起
+5. 工具条和卡片都能拖动：按住工具条空白处拖动整个工具条；卡片按住顶部标题栏拖动（✕ / 停止等按钮不受影响）
+
+### 生成记录
+
+主窗口侧栏「生成记录」页：
+
+- 每次生成完成后自动留档（选区原文、追问问题、正文、思考过程、来源应用、供应商/模型）
+- 失败与中途停止也留档（含已生成的部分内容与错误信息），便于排查
+- 右侧详情用 Markdown 渲染（表格、代码块、公式与悬浮卡片一致）
+- 「删除此条」「清空全部」管理本机记录；已录入笔记的条目显示「已录入」标记
+- 存储位置：`~/Library/Application Support/划词助手/history/`，一条一个 JSON，超过 1000 条自动清理最旧的
 
 ### 框选分析（聊天记录 / 图片 / PDF）
 
@@ -166,7 +183,9 @@ created: 2026-10-07
 - 在「供应商」页可点选强制指定某个供应商；「跟随插件当前设置」则用插件里 active 的那个
 - 「测试」按钮可探测连通性（API 显示延迟，网页版显示登录状态）
 - **DeepSeek 网页版**：与插件共用 `os.tmpdir()/aie-dsweb-profile` 专用浏览器与端口 9223。
-  插件里已登录过就直接可用；没登录过点「登录 DeepSeek 网页版」会弹出可见窗口让你登录一次。
+  插件里已登录过就直接可用；没登录过点「登录网页版」会**在专用浏览器窗口内**打开登录页
+  （不是系统默认浏览器——登录态必须写进专用 profile 才算数），登录完成后助手会自动探测并提示成功。
+  旁边「检查登录状态」可随时确认；「关闭浏览器」会关掉专用窗口（下次自动以 headless 重启）。
 
 ### 动作与提示词
 
@@ -182,7 +201,7 @@ created: 2026-10-07
 
 | 项 | 说明 |
 |---|---|
-| 划词后自动弹出工具条 | 关闭后只能用快捷键触发 |
+| 划词后自动弹出工具条 | 关闭后划词不再自动弹出，只能用快捷键 / 托盘「立即取词」/ 状态页「立即取词」手动触发 |
 | DeepSeek 网页版后台运行 | 开启则不弹浏览器窗口（headless） |
 | 取词快捷键 | Electron accelerator 语法，如 `CommandOrControl+Shift+E`；留空不注册 |
 | 划词长度上限 | 默认 3000 字，超出会截断并提示 |
@@ -203,11 +222,13 @@ created: 2026-10-07
 │  capture.ts    进程管理 / 协议解析 / 崩溃重启              │
 │  obsidian.ts   发现 vault、读插件 data.json、供应商解析     │
 │  note.ts       写笔记（callout 格式 + 哈希覆盖）            │
-│  overlay.ts    悬浮窗（不抢焦点、按需临时聚焦）             │
+│  history.ts    生成记录落盘（userData/history/，一条一 JSON）│
+│  overlay.ts    悬浮窗（不抢焦点、按需临时聚焦、JS 拖动）     │
 │  llm/api.ts    OpenAI 兼容三通道（Node流→fetch流→非流式）   │
-│  llm/dsweb.ts  DeepSeek 网页版 CDP 自动化（移植自插件）     │
+│  llm/dsweb.ts  DeepSeek 网页版 CDP 自动化（移植自插件）      │
 ├───────────────────────────────────────────────────────────┤
 │  renderer/overlay.html  工具条 + 结果卡片（流式渲染）       │
+│  renderer/md.js         GFM Markdown 渲染（两窗口共用）     │
 │  renderer/main.html     状态 / 供应商 / 提示词 / 记录       │
 └───────────────────────────────────────────────────────────┘
 ```
@@ -224,10 +245,11 @@ created: 2026-10-07
 │   │   ├── overlay.ts    悬浮窗窗口
 │   │   ├── obsidian.ts   配置桥（读插件 data.json）
 │   │   ├── note.ts       笔记写入
+│   │   ├── history.ts    生成记录落盘
 │   │   ├── settings.ts   本工具自身设置
 │   │   └── llm/          cdp.ts / dsweb.ts / api.ts / index.ts / types.ts
 │   ├── preload/preload.js
-│   ├── renderer/         overlay.* / main.* / mock-bridge.js
+│   ├── renderer/         overlay.* / main.* / md.js / mock-bridge.js
 │   └── shared/api.js     IPC 通道常量
 ├── swift/SelectionHelper.swift + build.sh
 ├── scripts/
@@ -235,7 +257,8 @@ created: 2026-10-07
 │   ├── make-icons.sh     生成 icns 与托盘图标
 │   ├── test-api.js       测 API 通道（读真实配置）
 │   ├── test-note.js      测笔记写入格式与覆盖
-│   └── inspect-overlay.js 用 CDP 调试悬浮窗
+│   ├── inspect-overlay.js 用 CDP 调试悬浮窗
+│   └── e2e/              E2E 回归（mock helper + CDP 驱动，见下）
 └── bin/SelectionHelper   编译产物
 ```
 
@@ -255,7 +278,8 @@ created: 2026-10-07
 确认 Obsidian 里 `ai-explainer` 插件已装好且有启用的供应商；到「供应商」页点「测试」看具体错误。
 
 **DeepSeek 网页版提示未登录？**
-点「登录 DeepSeek 网页版」弹出专用浏览器窗口登录一次；或先在 Obsidian 插件里登录（共用登录态）。
+到「供应商」页点「登录网页版」——会在**专用浏览器窗口**（独立 profile）里打开登录页，完成登录后助手自动提示成功；
+也可点「检查登录状态」确认。若此前在 Obsidian 插件里登录过则共用登录态，无需重复登录。
 
 **打包后首次打开被拦？**
 未签名应用，右键 .app → 打开；或 `系统设置 › 隐私与安全性` → 「仍要打开」。
@@ -284,6 +308,22 @@ node scripts/test-api.js                 # 直接测 API 通道
 node scripts/test-note.js                # 测笔记写入与覆盖
 node scripts/inspect-overlay.js          # 调试悬浮窗（需 --remote-debugging-port=9222 启动）
 ```
+
+### E2E 回归
+
+`scripts/e2e/run-e2e.sh` 用 mock SelectionHelper（JSON-lines 协议）+ 渲染层 CDP + 主进程 inspector
+驱动真实交互，覆盖工具条状态机（选中浮出 / 点击别处收起 / 双击选词 / OCR 卡片生命周期）与
+v0.1.1 功能（拖动 IPC、生成记录页端到端、autoPopup 拦截与手动放行）：
+
+```bash
+bash scripts/e2e/run-e2e.sh              # 全部用例
+bash scripts/e2e/run-e2e.sh lifecycle    # 只跑工具条状态机
+bash scripts/e2e/run-e2e.sh v011         # 只跑拖动/历史/autoPopup
+```
+
+> helper 在跑测试前被替换为 mock、结束后**字节级还原**（CDHash 不变 → 已授予的 TCC 权限无损）。
+> 脚本退出时会清理 mock helper 残留进程——它们由 electron spawn，杀 electron 会变孤儿，
+> 抢读控制文件会让下一轮出现难以定位的假失败。
 
 ## 许可证
 
