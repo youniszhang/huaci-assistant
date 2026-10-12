@@ -137,6 +137,7 @@
     dswebLogout: async () => ({ ok: true }),
     checkDswebStatus: async () => ({ state: "logged-in", ok: true }),
     onDswebStatus: () => () => {},
+    addDswebProvider: async () => ({ ok: true, created: true, message: "已添加「DeepSeek 网页版」供应商（mock）" }),
 
     listHistory: async () => ({
       records: [

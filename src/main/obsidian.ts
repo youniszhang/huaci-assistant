@@ -154,3 +154,88 @@ export function isProviderUsable(p: ProviderConfig): { ok: boolean; reason?: str
 	if (!(p.models?.length > 0)) return { ok: false, reason: "未配置模型" };
 	return { ok: true };
 }
+
+/** DeepSeek 网页版默认模型名（与插件「添加供应商」时写入的一致） */
+const DSWEB_DEFAULT_MODELS = ["DeepSeek-V4-Pro（专家模式）", "DeepSeek-V4-Flash（快速模式）"];
+
+export interface AddProviderResult {
+	ok: boolean;
+	/** 新建的供应商 id（已存在时为现有条目 id） */
+	id?: string;
+	/** 是否本次新建（false = 已存在，未改动配置） */
+	created?: boolean;
+	message?: string;
+}
+
+/**
+ * 确保插件配置里存在一个 DeepSeek 网页版供应商条目。
+ *
+ * 为什么需要它：供应商列表完全来自插件的 data.json，插件本身没有任何预置
+ * 条目（addProvider 只由用户手动触发）。所以新机器上用户点「登录网页版」
+ * 登录成功后，配置里若没有 ptype=dsweb 的条目，列表里就没有它可选 ——
+ * 登录态有效却无处可用。此函数补齐这个条目，让「登录即可用」成立。
+ *
+ * 安全约束（写的是用户的 Obsidian 配置文件，必须保守）：
+ *  - 已有 dsweb 条目 → 不动配置，只返回其 id
+ *  - 写入前备份 data.json.bak，写入用「临时文件 + rename」保证原子性
+ *  - 只增不改：不触碰其它供应商与插件的其它设置
+ */
+export function ensureDswebProvider(
+	vaultPath: string,
+	opts: { port?: number; activate?: boolean } = {}
+): AddProviderResult {
+	const file = explainerDataPath(vaultPath);
+	if (!fs.existsSync(file)) {
+		return { ok: false, message: `未找到插件配置：${file}` };
+	}
+	let raw: Record<string, unknown>;
+	try {
+		raw = JSON.parse(fs.readFileSync(file, "utf8"));
+	} catch (err) {
+		return { ok: false, message: `插件配置解析失败：${(err as Error).message}` };
+	}
+	if (!Array.isArray(raw.providers)) raw.providers = [];
+
+	// 已有 dsweb 条目 → 只读返回，不改配置
+	const existing = (raw.providers as ProviderConfig[]).find((p) => p?.ptype === "dsweb");
+	if (existing?.id) {
+		return { ok: true, id: existing.id, created: false };
+	}
+
+	const prov: ProviderConfig = {
+		id: `dsweb${Date.now().toString(36)}`,
+		name: "DeepSeek 网页版",
+		baseURL: "https://chat.deepseek.com",
+		apiKey: "",
+		models: [...DSWEB_DEFAULT_MODELS],
+		enabled: true,
+		ptype: "dsweb",
+		vision: true,
+		dswebPort: opts.port ?? 9223,
+		expertMode: true,
+	};
+	(raw.providers as ProviderConfig[]).push(prov);
+	// 切为使用中：登录的目的就是用它，不自动激活会让人以为「还是不能用」
+	if (opts.activate !== false) {
+		raw.activeProviderId = prov.id;
+		raw.activeModel = prov.models[0];
+	}
+
+	try {
+		// 备份（覆盖上一次备份即可，避免堆积）
+		try {
+			fs.copyFileSync(file, `${file}.bak`);
+		} catch {
+			// 备份失败不阻断写入，但要留痕
+			console.error("[obsidian] 备份 data.json 失败，继续写入");
+		}
+		// 原子写：临时文件 + rename，避免写一半损坏用户配置
+		const tmp = `${file}.tmp-${process.pid}`;
+		fs.writeFileSync(tmp, JSON.stringify(raw, null, 2), "utf8");
+		fs.renameSync(tmp, file);
+		console.log(`[obsidian] 已补建 DeepSeek 网页版供应商（id=${prov.id}）→ ${file}`);
+		return { ok: true, id: prov.id, created: true };
+	} catch (err) {
+		return { ok: false, message: `写入插件配置失败：${(err as Error).message}` };
+	}
+}

@@ -7,6 +7,7 @@
 #   bash scripts/e2e/run-e2e.sh lifecycle          # 只跑工具条状态机
 #   bash scripts/e2e/run-e2e.sh v011               # 只跑 v0.1.1（拖动/历史/autoPopup）
 #   bash scripts/e2e/run-e2e.sh dsweb-login        # 只跑网页版登录链路（真机，隔离 profile）
+#   bash scripts/e2e/run-e2e.sh dsweb-provider     # 只跑供应商条目补建（纯文件）
 #
 # 关键点：
 #  - helper 字节级备份/还原 → CDHash 不变 → TCC 权限无损
@@ -28,6 +29,11 @@ CASES=("$@")
 if [ "${CASES[*]}" = "dsweb-login" ]; then
   echo "======== 用例: dsweb-login（真机，隔离 profile） ========"
   node "$ROOT/scripts/e2e/e2e-dsweb-login.js"
+  exit $?
+fi
+if [ "${CASES[*]}" = "dsweb-provider" ]; then
+  echo "======== 用例: dsweb-provider（供应商条目补建，纯文件） ========"
+  node "$ROOT/scripts/e2e/e2e-dsweb-provider.js"
   exit $?
 fi
 

@@ -1,12 +1,14 @@
 /**
  * E2E：DeepSeek 网页版登录链路（真机，隔离 profile）
  *
- * 覆盖 2026-10-12 修复的两个缺陷：
+ * 覆盖三个缺陷：
  *   1. headless 实例存在时点「登录网页版」→ 必须切换为可见窗口
  *      （修复前 ensureBrowser 复用 headless 实例，登录页在不可见窗口打开，
  *       用户看不到 → 「新电脑首次登录不了」）
  *   2. 登录轮询探测不得导航（修复前 probeLoginStatus 走 connectDeepSeek，
  *       内含 Page.navigate，会把用户正在填的登录页反复拽回首页）
+ *   3. 配置里缺 ptype=dsweb 条目时，登录后列表里没有它可选 —— 需自动补建
+ *      （见 ensureDswebProvider 单测）
  *
  * 隔离措施：
  *   - 独立端口（默认 9225）与独立 profile（HUACI_DSWEB_PROFILE）

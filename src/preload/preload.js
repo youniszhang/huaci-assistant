@@ -50,6 +50,7 @@ const bridge = {
   dswebLogout: () => ipcRenderer.invoke(API["config:dsweb-logout"]),
   checkDswebStatus: () => ipcRenderer.invoke(API["config:dsweb-status"]),
   onDswebStatus: (cb) => subscribe(API["config:dsweb-status"], cb),
+  addDswebProvider: () => ipcRenderer.invoke(API["config:add-dsweb-provider"]),
 
   // ---- 生成历史 ----
   listHistory: (payload) => ipcRenderer.invoke(API["history:list"], payload),

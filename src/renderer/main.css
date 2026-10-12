@@ -620,6 +620,29 @@ html, body {
   overflow-y: auto;
 }
 
+/* 提示条（如缺 DeepSeek 网页版供应商时的引导） */
+.hint {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-4);
+  font-size: var(--fs-caption);
+  line-height: 1.6;
+  color: var(--c-text-2);
+  background: var(--c-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--c-accent) 26%, transparent);
+  border-radius: var(--r-popover);
+}
+.hint .hint-icon {
+  flex: 0 0 auto;
+  color: var(--c-accent);
+}
+.hint > span:nth-of-type(1) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 /* ---------------- 生成记录页 ---------------- */
 
 .history-layout {

@@ -38,6 +38,7 @@ const API = {
   'config:dsweb-login': 'config:dsweb-login',
   'config:dsweb-logout': 'config:dsweb-logout',
   'config:dsweb-status': 'config:dsweb-status',  // main → renderer 推送：登录状态变化
+  'config:add-dsweb-provider': 'config:add-dsweb-provider',  // 补建网页版供应商条目
 
   // 生成历史
   'history:list': 'history:list',

@@ -14,7 +14,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { SelectionCapture, SelectionEvent, ClickEvent, helperPath, ScreenRect, OcrResult } from "./capture";
 import { OverlayWindow, OverlayPosition, RegionOverlay } from "./overlay";
-import { listVaults, loadProviders, pickVault, ProviderBundle } from "./obsidian";
+import { listVaults, loadProviders, pickVault, ProviderBundle, ensureDswebProvider } from "./obsidian";
 import { AppSettings, fillTemplate, loadSettings, saveSettings } from "./settings";
 import { listCaptures, readCapture, writeCapture, sanitizeBody, annotationTitle } from "./note";
 import { runLlm, SYSTEM_PROMPT, ChatMessage, ensureBrowser, killBrowser, connectDeepSeek, checkLogin, openLoginPage, probeLoginStatus } from "./llm";
@@ -1024,10 +1024,48 @@ function registerIpc(): void {
 			// 浏览器 profile，CDP 专用 profile 读不到 → 「登录了但助手仍说未登录」。
 			await openLoginPage(port);
 			void notifyDswebStatus({ state: "waiting", message: "已在专用浏览器打开登录页，请完成登录" });
-			return { ok: true, message: "已在专用浏览器打开登录页，请在该窗口完成登录" };
+			// 补齐供应商条目：插件配置里若没有 ptype=dsweb 的条目，登录成功后
+			// 列表里也没有它可选（登录态有效却无处可用）——这里自动补建并切为使用中
+			const v = pickVault(settings.vaultPath || undefined);
+			let created = false;
+			if (v) {
+				const res = ensureDswebProvider(v.path, { port, activate: true });
+				if (res.ok && res.created) {
+					created = true;
+					rebuildTrayMenu();
+					console.log("[dsweb-login] 已自动补建 DeepSeek 网页版供应商并切为使用中");
+				} else if (!res.ok) {
+					console.error(`[dsweb-login] 补建供应商失败：${res.message}`);
+				}
+			}
+			return {
+				ok: true,
+				created,
+				message: created
+					? "已在专用浏览器打开登录页；已自动添加「DeepSeek 网页版」供应商并切为使用中，请在该窗口完成登录"
+					: "已在专用浏览器打开登录页，请在该窗口完成登录",
+			};
 		} catch (err) {
 			return { ok: false, message: (err as Error).message };
 		}
+	});
+
+	// 手动补建 DeepSeek 网页版供应商条目（供应商页在缺条目时提供入口）
+	ipcMain.handle(ch("config:add-dsweb-provider"), () => {
+		const v = pickVault(settings.vaultPath || undefined);
+		if (!v) return { ok: false, message: "未找到 Obsidian vault，请先在状态页选择笔记库" };
+		const res = ensureDswebProvider(v.path, { port: DEFAULT_DSWEB_PORT, activate: true });
+		if (res.ok) {
+			rebuildTrayMenu();
+			return {
+				ok: true,
+				created: res.created,
+				message: res.created
+					? "已添加「DeepSeek 网页版」供应商并切为使用中"
+					: "已存在「DeepSeek 网页版」供应商，已切为使用中",
+			};
+		}
+		return res;
 	});
 
 	ipcMain.handle(ch("config:dsweb-logout"), () => {

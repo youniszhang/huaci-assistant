@@ -180,6 +180,11 @@ created: 2026-10-07
 配置来源：`<vault>/.obsidian/plugins/ai-explainer/data.json` 的 `providers` 数组。
 工具会自动发现本机所有 Obsidian vault，优先选装了插件的那个。
 
+> **供应商条目来自插件配置，本工具不预置任何供应商**。所以「网页版」要在列表里可选，
+> 前提是插件配置里存在一个 `ptype=dsweb` 的条目。若你的配置里只有 API 供应商，
+> 供应商页会给出提示并可**一键添加**（写入插件配置并切为使用中，写入前自动备份、
+> 已有条目时不会重复创建）；点「登录网页版」时也会自动补建。
+
 - 在「供应商」页可点选强制指定某个供应商；「跟随插件当前设置」则用插件里 active 的那个
 - 「测试」按钮可探测连通性（API 显示延迟，网页版显示登录状态）
 - **DeepSeek 网页版**：与插件共用 `os.tmpdir()/aie-dsweb-profile` 专用浏览器与端口 9223。
@@ -324,6 +329,7 @@ bash scripts/e2e/run-e2e.sh              # 全部用例
 bash scripts/e2e/run-e2e.sh lifecycle    # 只跑工具条状态机
 bash scripts/e2e/run-e2e.sh v011         # 只跑拖动/历史/autoPopup
 bash scripts/e2e/run-e2e.sh dsweb-login  # 网页版登录链路（真机，隔离 profile）
+bash scripts/e2e/run-e2e.sh dsweb-provider  # 供应商条目补建（纯文件，含边界）
 ```
 
 > helper 在跑测试前被替换为 mock、结束后**字节级还原**（CDHash 不变 → 已授予的 TCC 权限无损）。

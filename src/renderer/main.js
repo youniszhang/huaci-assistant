@@ -241,10 +241,44 @@
       })
       .join("");
 
+    // 配置里没有 DeepSeek 网页版条目 → 明确提示并可一键补建。
+    // 供应商列表完全来自 Obsidian 插件配置（插件无任何预置条目），
+    // 新机器上常见「只有 API 供应商」，此时登录网页版也选不到它。
+    const hasDsweb = providers.some((p) => p.ptype === "dsweb");
+    const hintEl = $("dswebMissingHint");
+    if (hasDsweb || !providers.length) {
+      hintEl.classList.add("hidden");
+    } else {
+      hintEl.classList.remove("hidden");
+      hintEl.innerHTML =
+        '<span class="hint-icon" data-icon="info" data-icon-class="ic ic-sm"></span>' +
+        "<span>当前配置里没有「DeepSeek 网页版」供应商（免 API Key，复用网页登录态）。" +
+        "点右侧按钮添加，或到 Obsidian 插件设置里手动添加。</span>" +
+        '<button class="btn" id="btnAddDsweb">添加 DeepSeek 网页版</button>';
+      Icons && Icons.hydrate(hintEl);
+    }
+
     $("providerHint").textContent = vaultPath
       ? `配置来源：${shortPath(vaultPath)}/.obsidian/plugins/ai-explainer/data.json`
       : "";
   }
+
+  // 补建 DeepSeek 网页版供应商（写回插件 data.json 并切为使用中）
+  $("dswebMissingHint").addEventListener("click", async (e) => {
+    if (!e.target.closest("#btnAddDsweb")) return;
+    const btn = e.target.closest("#btnAddDsweb");
+    btn.disabled = true;
+    btn.textContent = "添加中…";
+    const res = await api.addDswebProvider();
+    toast(res.ok ? res.message : "失败：" + res.message, 6000);
+    if (res.ok) {
+      await loadProviders();
+      await loadStatus();
+    } else {
+      btn.disabled = false;
+      btn.textContent = "添加 DeepSeek 网页版";
+    }
+  });
 
   $("providerList").addEventListener("click", async (e) => {
     const useBtn = e.target.closest("[data-use]");
@@ -281,7 +315,12 @@
   $("btnDswebLogin").addEventListener("click", async () => {
     toast("正在打开专用浏览器登录页…", 4000);
     const res = await api.dswebLogin({});
-    toast(res.ok ? res.message : "失败：" + res.message, 6000);
+    toast(res.ok ? res.message : "失败：" + res.message, 7000);
+    // 登录流程可能自动补建了 dsweb 供应商条目 → 刷新列表与状态
+    if (res.ok) {
+      await loadProviders();
+      await loadStatus();
+    }
   });
 
   $("btnDswebLogout").addEventListener("click", async () => {
