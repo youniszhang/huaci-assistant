@@ -68,6 +68,12 @@ export function findBrowserBinary(): string | null {
 	return null;
 }
 
+/** 专用浏览器 profile 目录（与 Obsidian 插件共用，故两边登录态互通） */
+function profileDir(): string {
+	// 环境变量仅用于测试隔离（避免测试污染真实登录态）；正常情况走默认路径
+	return process.env.HUACI_DSWEB_PROFILE || path.join(os.tmpdir(), "aie-dsweb-profile");
+}
+
 /** 启动专用浏览器（独立 profile，登录态持久）。已启动则复用。headless=后台不可见 */
 export async function ensureBrowser(port: number, headless = false): Promise<void> {
 	// 探测端口是否已有浏览器在听
@@ -81,7 +87,7 @@ export async function ensureBrowser(port: number, headless = false): Promise<voi
 	if (!bin) {
 		throw new Error("未找到 Chrome/Edge，请安装后重试");
 	}
-	const profileDir = path.join(os.tmpdir(), "aie-dsweb-profile");
+	const dir = profileDir();
 	// 显式带系统代理（macOS 读 scutil；Windows/Linux 交给 Chromium 系统设置）
 	let proxyFlag = "";
 	try {
@@ -94,7 +100,7 @@ export async function ensureBrowser(port: number, headless = false): Promise<voi
 	} catch {}
 	const flags = [
 		`--remote-debugging-port=${port}`,
-		`--user-data-dir=${profileDir}`,
+		`--user-data-dir=${dir}`,
 		"--no-first-run",
 		"--no-default-browser-check",
 	];
@@ -495,7 +501,10 @@ function buildInjectFilesJs(files: { base64: string; name: string; mime: string 
 export function killBrowser(): void {
 	try {
 		const { execSync } = require("child_process");
-		execSync('pkill -f "aie-dsweb-profile"', { stdio: "ignore" });
+		// 按实际 profile 路径匹配：测试用 HUACI_DSWEB_PROFILE 隔离时，
+		// 硬编码 "aie-dsweb-profile" 会误杀真实实例
+		const marker = path.basename(profileDir());
+		execSync(`pkill -f ${JSON.stringify(marker)}`, { stdio: "ignore" });
 	} catch {}
 	browserProc = null;
 }
@@ -503,11 +512,20 @@ export function killBrowser(): void {
 /**
  * 打开登录页：在专用浏览器（CDP profile）内导航到登录页并置前。
  *
- * 关键：绝不能用 shell.openExternal —— 那会打开系统默认浏览器，
- * 登录态写进日常浏览器的 profile，与专用 profile（aie-dsweb-profile）无关，
- * 表现为「明明登录了，助手仍提示未登录」。
+ * 关键 1：绝不能用 shell.openExternal —— 那会打开系统默认浏览器，
+ *   登录态写进日常浏览器的 profile，与专用 profile（aie-dsweb-profile）无关，
+ *   表现为「明明登录了，助手仍提示未登录」。
+ *
+ * 关键 2：必须先 killBrowser() 再以可见模式重启。
+ *   ensureBrowser 发现端口已被占用时会直接复用现有实例——若后台正跑着
+ *   headless（不可见）实例（例如用户先点了「解释」触发过一次生成），
+ *   登录页就会在不可见窗口里打开，用户什么都看不到、无法登录。
+ *   这是「新电脑首次登录不了」的根因（新机器第一步通常是先生成 → headless 常驻）。
  */
 export async function openLoginPage(port: number): Promise<CDPClient> {
+	// 从 headless 切可见：杀掉现有实例（无论 headless 还是可见），确保下面重启的是可见窗口
+	killBrowser();
+	await new Promise((r) => setTimeout(r, 1200));
 	// 可见窗口（headless 下用户无法操作登录页）
 	await ensureBrowser(port, false);
 	const client = await connectDeepSeekForLogin(port);
@@ -535,14 +553,26 @@ async function connectDeepSeekForLogin(port: number): Promise<CDPClient> {
 }
 
 /**
- * 登录态探测：headless 打开页面跑 PROBE，读完后关闭浏览器。
- * 用于「登录页流程是否已完成」的确认（登录态在 profile 里，headless 也能读到）。
+ * 登录态探测：连上当前 DeepSeek 页面跑 PROBE，读完即断开。
+ *
+ * 注意：绝不能走 connectDeepSeek —— 它内部有两次 Page.navigate，
+ * 而本函数被设置页以 4s 间隔轮询（等用户完成登录）。若探测时导航，
+ * 用户正在填写的登录页会被反复拽回首页，登录永远完不成。
+ * 因此这里只连当前已打开的页面做只读探测，不做任何导航。
+ *
  * 返回 null 表示探测本身失败（浏览器起不来等）。
  */
 export async function probeLoginStatus(port: number): Promise<{ loggedIn: boolean } | null> {
 	let client: CDPClient | null = null;
 	try {
-		client = await connectDeepSeek(port, true);
+		await ensureBrowser(port, true); // 未运行则以 headless 拉起（不打断已有实例）
+		const targets = await listTargets(port);
+		const target = targets.find(
+			(t) => t.url.includes("chat.deepseek.com") && t.webSocketDebuggerUrl && t.type === "page"
+		);
+		if (!target) return { loggedIn: false };
+		client = await CDPClient.connect(target.webSocketDebuggerUrl!);
+		await client.send("Runtime.enable");
 		const login = await checkLogin(client);
 		return { loggedIn: login.loggedIn };
 	} catch {

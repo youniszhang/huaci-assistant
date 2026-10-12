@@ -3,9 +3,10 @@
 # E2E 回归：mock SelectionHelper + 渲染层 CDP + 主进程 inspector
 #
 # 用法：
-#   bash scripts/e2e/run-e2e.sh                    # 全部（v0.1.0 状态机 + v0.1.1）
+#   bash scripts/e2e/run-e2e.sh                    # 全部（v0.1.0 状态机 + v0.1.1 + 登录链路）
 #   bash scripts/e2e/run-e2e.sh lifecycle          # 只跑工具条状态机
 #   bash scripts/e2e/run-e2e.sh v011               # 只跑 v0.1.1（拖动/历史/autoPopup）
+#   bash scripts/e2e/run-e2e.sh dsweb-login        # 只跑网页版登录链路（真机，隔离 profile）
 #
 # 关键点：
 #  - helper 字节级备份/还原 → CDHash 不变 → TCC 权限无损
@@ -22,6 +23,13 @@ rm -rf "$DIR/userdata" "$DIR/app.log"
 
 CASES=("$@")
 [ ${#CASES[@]} -eq 0 ] && CASES=(lifecycle v011)
+
+# 登录链路用例不需要 mock helper（它不启动 electron），单独提前处理
+if [ "${CASES[*]}" = "dsweb-login" ]; then
+  echo "======== 用例: dsweb-login（真机，隔离 profile） ========"
+  node "$ROOT/scripts/e2e/e2e-dsweb-login.js"
+  exit $?
+fi
 
 # 备份真实 helper（字节级还原 → CDHash 不变 → TCC 权限无损）
 BEFORE=$(shasum -a 256 bin/SelectionHelper | awk '{print $1}')

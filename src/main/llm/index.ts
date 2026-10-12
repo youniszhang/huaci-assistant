@@ -91,7 +91,7 @@ export async function runDsweb(opts: RunLlmOptions): Promise<RunLlmResult> {
 		const login = await checkLogin(client);
 		if (!login.loggedIn) {
 			throw new Error(
-				"DeepSeek 网页版未登录。请在「设置 → 供应商管理」点「登录 DeepSeek 网页版」完成登录（或先在 Obsidian 插件里登录）。"
+				"DeepSeek 网页版未登录。请打开划词助手主窗口 →「供应商」页 → 点「登录网页版」完成登录（登录态与 Obsidian 插件共用）。"
 			);
 		}
 		const prompt = flattenMessages(opts.messages);
