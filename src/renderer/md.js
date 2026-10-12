@@ -60,10 +60,16 @@
     const out = [];
     let listType = null;
     let para = [];
+    /** 是否已输出过首个内容块（用于给「结论段」加视觉标记，见下方 lead 处理） */
+    let sawFirstBlock = false;
 
     const flushPara = () => {
       if (para.length) {
-        out.push(`<p>${inline(para.join("<br>"))}</p>`);
+        // 第一个段落视为「结论段」：加 lead 标记，样式上做视觉区分
+        // （配合系统提示词要求「第一行先给一句话结论」，让最重要内容一眼可见）
+        const isLead = !sawFirstBlock;
+        out.push(`<p${isLead ? ' class="lead"' : ""}>${inline(para.join("<br>"))}</p>`);
+        sawFirstBlock = true;
         para = [];
       }
     };
@@ -83,6 +89,7 @@
         flushPara();
         closeList();
         out.push(t);
+        sawFirstBlock = true;
         continue;
       }
       if (!t) {
@@ -118,6 +125,7 @@
         out.push(
           `<div class="table-wrap"><table><thead><tr>${th}</tr></thead><tbody>${tb}</tbody></table></div>`
         );
+        sawFirstBlock = true;
         i = j - 1;
         continue;
       }
@@ -128,12 +136,14 @@
         closeList();
         const lvl = Math.min(h[1].length + 1, 4);
         out.push(`<h${lvl}>${inline(h[2])}</h${lvl}>`);
+        sawFirstBlock = true;
         continue;
       }
       if (t.startsWith(">")) {
         flushPara();
         closeList();
         out.push(`<blockquote>${inline(t.replace(/^>\s?/, ""))}</blockquote>`);
+        sawFirstBlock = true;
         continue;
       }
       const ul = t.match(/^[-*+]\s+(.*)$/);
@@ -145,6 +155,7 @@
           listType = "ul";
         }
         out.push(`<li>${inline(ul[1])}</li>`);
+        sawFirstBlock = true;
         continue;
       }
       const ol = t.match(/^\d+[.)]\s+(.*)$/);
@@ -156,6 +167,7 @@
           listType = "ol";
         }
         out.push(`<li>${inline(ol[1])}</li>`);
+        sawFirstBlock = true;
         continue;
       }
       if (/^[-=_*~]{3,}$/.test(t)) {

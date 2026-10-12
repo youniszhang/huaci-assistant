@@ -9,6 +9,7 @@
 #   bash scripts/e2e/run-e2e.sh dsweb-login        # 只跑网页版登录链路（真机，隔离 profile）
 #   bash scripts/e2e/run-e2e.sh dsweb-provider     # 只跑供应商条目补建（纯文件）
 #   bash scripts/e2e/run-e2e.sh provider-crud      # 只跑供应商增删改（纯文件）
+#   bash scripts/e2e/run-e2e.sh hotkey-lead        # 快捷键录制 + 结论置顶渲染
 #   （provider-ui 需要手动准备临时 vault，见脚本头部说明）
 #
 # 关键点：
@@ -43,6 +44,22 @@ if [ "${CASES[*]}" = "provider-crud" ]; then
   node "$ROOT/scripts/e2e/e2e-provider-crud.js"
   exit $?
 fi
+if [ "${CASES[*]}" = "hotkey-lead" ]; then
+  # 快捷键录制 + 结论置顶：需要独立实例（会改隔离 userData 的快捷键设置）
+  DIR2=/tmp/huaci-v015
+  rm -rf "$DIR2"
+  ./node_modules/.bin/electron . --remote-debugging-port=9222 --inspect=9339 --user-data-dir="$DIR2" > "$DIR2.log" 2>&1 &
+  HPID=$!
+  for i in $(seq 1 40); do
+    curl -s "http://127.0.0.1:9222/json/version" >/dev/null 2>&1 && curl -s "http://127.0.0.1:9339/json/list" >/dev/null 2>&1 && break
+    sleep 0.5
+  done
+  sleep 2
+  WS_PATH="$ROOT/node_modules/ws" node "$ROOT/scripts/e2e/e2e-hotkey-lead.js"
+  RC2=$?
+  kill $HPID 2>/dev/null; sleep 1; pkill -f "user-data-dir=$DIR2" 2>/dev/null
+  exit $RC2
+fi
 
 # 备份真实 helper（字节级还原 → CDHash 不变 → TCC 权限无损）
 BEFORE=$(shasum -a 256 bin/SelectionHelper | awk '{print $1}')
@@ -64,6 +81,20 @@ restore() {
   return 0
 }
 trap restore EXIT
+
+# 预置 settings.json：
+#  - autoPopup: true —— lifecycle/v011 用例验证的是「划词即弹」的状态机；
+#    v0.1.5 起产品默认改为 false（快捷键触发），若不预置这些旧用例会全部超时。
+#  - hotkeyCapture 留空 —— 避免与真机/其它测试实例抢全局快捷键。
+mkdir -p "$DIR/userdata/huaci-dev"
+cat > "$DIR/userdata/huaci-dev/settings.json" <<'JSON'
+{
+  "autoPopup": true,
+  "hotkeyCapture": "",
+  "hotkeyScan": "",
+  "dswebHeadless": true
+}
+JSON
 
 # 启动 dev 实例（渲染 CDP 9334 + 主进程 inspector 9335，隔离 userData）
 ELECTRON_ENABLE_LOGGING=1 ./node_modules/.bin/electron . \

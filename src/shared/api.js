@@ -52,6 +52,8 @@ const API = {
   // 应用设置
   'settings:get': 'settings:get',
   'settings:save': 'settings:save',
+  'settings:hotkey-state': 'settings:hotkey-state',  // 快捷键注册结果（是否被占用）
+  'settings:default-actions': 'settings:default-actions',  // 预设动作默认提示词
 
   // 笔记
   'notes:list': 'notes:list',

@@ -84,8 +84,15 @@
     const ok = running && status.available;
     $("heroPulse").className = "hero-pulse" + (ok ? "" : running ? " warn" : " off");
     $("heroTitle").textContent = ok ? "划词监听已开启" : running ? "划词监听异常" : "划词监听已关闭";
+    // 提示按实际触发方式说明（自动弹 / 快捷键），避免文案与实际行为不符
+    const autoPop = !!(settings && settings.autoPopup);
+    const hkCapture = (settings && settings.hotkeyCapture) || "";
     $("heroSub").textContent = ok
-      ? "在任意应用选中文字，工具条会自动浮出"
+      ? autoPop
+        ? "在任意应用选中文字，工具条会自动浮出"
+        : hkCapture
+        ? `选中文字后按 ${prettyAccel(hkCapture)} 唤起工具条`
+        : "未设置取词快捷键——请到「偏好」里设置，或开启「划词后自动弹出」"
       : running
       ? "未找到 SelectionHelper 可执行文件"
       : "点击右侧开关重新开启";
@@ -174,19 +181,187 @@
     api.openExternal("file://" + vaultPath + "/" + dir);
   });
 
-  $("inHotkey").addEventListener("change", saveSimple);
-  $("inHotkeyScan").addEventListener("change", saveSimple);
   $("inAutoPopup").addEventListener("change", saveSimple);
   $("inHeadless").addEventListener("change", saveSimple);
 
   async function saveSimple() {
-    settings.hotkeyCapture = $("inHotkey").value.trim();
-    settings.hotkeyScan = $("inHotkeyScan").value.trim();
     settings.autoPopup = $("inAutoPopup").checked;
     settings.dswebHeadless = $("inHeadless").checked;
     await api.saveSettings(settings);
     toast("已保存");
   }
+
+  // ------------------------------------------------ 快捷键录制（按键即设置）
+  //
+  // 不用输入框手写 "CommandOrControl+Shift+E"（普通用户不会）：
+  // 点按钮进入录制态 → 直接按组合键 → 转成 Electron accelerator 存盘。
+  // 保存后主进程回传注册结果，被占用时按钮标红提示。
+
+  /** 是否 macOS（显示 ⌘⌥⌃⇧ 符号，与系统习惯一致） */
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform || "") || /Mac/.test(navigator.userAgent);
+
+  /** 浏览器 KeyboardEvent → Electron accelerator 片段 */
+  const MOD_KEYS = {
+    Meta: "Command",
+    Control: "Control",
+    Alt: "Alt",
+    Shift: "Shift",
+  };
+
+  /** 主键名映射（浏览器 key → accelerator 名） */
+  function mainKeyName(e) {
+    const k = e.key;
+    if (!k) return "";
+    if (k === " ") return "Space";
+    if (k === "Escape" || k === "Enter" || k === "Tab" || k === "Backspace" || k === "Delete") return k;
+    if (k === "ArrowUp") return "Up";
+    if (k === "ArrowDown") return "Down";
+    if (k === "ArrowLeft") return "Left";
+    if (k === "ArrowRight") return "Right";
+    if (/^[a-z]$/i.test(k)) return k.toUpperCase();
+    if (/^[0-9]$/.test(k)) return k;
+    if (/^F\d{1,2}$/.test(k)) return k;
+    // 标点等单字符：Electron 要求用 keycode 名，常见的映射几个
+    const PUNCT = { "`": "`", "-": "-", "=": "=", "[": "[", "]": "]", "\\": "\\", ";": ";", "'": "'", ",": ",", ".": ".", "/": "/" };
+    if (PUNCT[k]) return PUNCT[k];
+    return "";
+  }
+
+  /** 把按下的键转成 accelerator（至少一个修饰键 + 主键，或 F1-F20 单键） */
+  function toAccelerator(e) {
+    const mods = [];
+    if (e.metaKey) mods.push("Command");
+    if (e.ctrlKey) mods.push("Control");
+    if (e.altKey) mods.push("Alt");
+    if (e.shiftKey) mods.push("Shift");
+    const key = mainKeyName(e);
+    if (!key) return null;
+    // 纯修饰键按下（还没按主键）→ 不完整，继续等待
+    if (Object.keys(MOD_KEYS).includes(e.key)) return null;
+    // 只按 F1-F20 可以无修饰键；其它键必须有修饰键（否则会吃掉日常输入）
+    const isFn = /^F\d{1,2}$/.test(key);
+    if (!mods.length && !isFn) return null;
+    // Electron accelerator 顺序：修饰键在前，主键在后
+    return [...mods, key].join("+");
+  }
+
+  /** accelerator → 显示文案（macOS 用符号） */
+  function prettyAccel(acc) {
+    if (!acc) return "未设置";
+    if (!isMac) {
+      return acc.replace(/CommandOrControl|Command|Cmd/g, "Ctrl").replace(/\+/g, " + ");
+    }
+    return acc
+      .replace(/CommandOrControl|Command|Cmd/g, "⌘")
+      .replace(/Control|Ctrl/g, "⌃")
+      .replace(/Alt|Option/g, "⌥")
+      .replace(/Shift/g, "⇧")
+      .replace(/\+/g, "");
+  }
+
+  const hotkeyBtns = {
+    capture: $("hotkeyCapture"),
+    scan: $("hotkeyScan"),
+  };
+  let recordingKey = "";
+
+  function renderHotkeyBtn(which, acc, conflict) {
+    const btn = hotkeyBtns[which];
+    if (!btn) return;
+    btn.querySelector(".hotkey-text").textContent = prettyAccel(acc);
+    btn.classList.toggle("empty", !acc);
+    btn.classList.toggle("conflict", !!conflict && !!acc);
+    btn.title = conflict && acc ? `注册失败：${conflict}` : acc ? "点击后按下新的组合键" : "点击后按下组合键";
+  }
+
+  function stopRecording() {
+    if (!recordingKey) return;
+    const which = recordingKey;
+    const btn = hotkeyBtns[which];
+    if (btn) btn.classList.remove("recording");
+    recordingKey = "";
+    document.removeEventListener("keydown", onRecordKey, true);
+    document.removeEventListener("mousedown", onRecordClickOutside, true);
+    // 恢复按钮显示（录制态把文案换成了「按下组合键…」，取消/结束后要还原原值）
+    const acc = settings
+      ? which === "capture"
+        ? settings.hotkeyCapture
+        : settings.hotkeyScan
+      : "";
+    renderHotkeyBtn(which, acc, "");
+  }
+
+  function onRecordClickOutside(e) {
+    if (e.target.closest(".hotkey-btn")) return;
+    stopRecording();
+  }
+
+  function onRecordKey(e) {
+    if (!recordingKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const which = recordingKey;
+    // Esc 单独按下 = 取消录制（不当作快捷键）
+    if (e.key === "Escape" && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      stopRecording();
+      return;
+    }
+    if (e.key === "Backspace" && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      // 退格 = 清除快捷键
+      stopRecording();
+      applyHotkey(which, "");
+      return;
+    }
+    const acc = toAccelerator(e);
+    if (!acc) return; // 只按了修饰键，继续等
+    stopRecording();
+    applyHotkey(which, acc);
+  }
+
+  /** 写入设置并保存快捷键；主进程返回注册结果 */
+  async function applyHotkey(which, acc) {
+    const otherKey = which === "capture" ? "hotkeyScan" : "hotkeyCapture";
+    const otherVal = (settings[otherKey] || "").trim();
+    if (acc && otherVal && acc === otherVal) {
+      toast("与另一个快捷键重复，请换一个组合");
+      return;
+    }
+    if (which === "capture") settings.hotkeyCapture = acc;
+    else settings.hotkeyScan = acc;
+    const res = await api.saveSettings(settings);
+    const hs = (res && res.hotkeys) || {};
+    const ok = which === "capture" ? hs.captureOk : hs.scanOk;
+    const err = which === "capture" ? hs.captureError : hs.scanError;
+    renderHotkeyBtn("capture", settings.hotkeyCapture, hs.captureOk === false ? hs.captureError : "");
+    renderHotkeyBtn("scan", settings.hotkeyScan, hs.scanOk === false ? hs.scanError : "");
+    if (acc && ok === false) {
+      toast(`⚠️ ${prettyAccel(acc)} 注册失败：${err || "已被占用"}`, 6000);
+    } else if (acc) {
+      toast(`快捷键已设为 ${prettyAccel(acc)}`);
+    } else {
+      toast("已清除快捷键");
+    }
+  }
+
+  Object.entries(hotkeyBtns).forEach(([which, btn]) => {
+    if (!btn) return;
+    btn.addEventListener("click", (e) => {
+      // 点 × 清除
+      if (e.target.closest(".hotkey-clear")) {
+        e.stopPropagation();
+        stopRecording();
+        applyHotkey(which, "");
+        return;
+      }
+      if (recordingKey === which) return stopRecording();
+      stopRecording();
+      recordingKey = which;
+      btn.classList.add("recording");
+      btn.querySelector(".hotkey-text").textContent = "按下组合键…";
+      document.addEventListener("keydown", onRecordKey, true);
+      document.addEventListener("mousedown", onRecordClickOutside, true);
+    });
+  });
 
   // ------------------------------------------------ 供应商页
 
@@ -644,6 +819,25 @@
     renderActions();
   });
 
+  // 恢复预设动作的默认提示词（「结论置顶 + 关键词加粗」结构）。
+  // 只覆盖 id 与预设相同的动作提示词，用户自建动作不受影响。
+  $("btnResetActions").addEventListener("click", async () => {
+    if (!confirm("把「解释 / 翻译 / 总结 / 意图分析 / 拟回复」的提示词恢复为默认？\n\n（只影响预设动作，你自己新增的动作不受影响；未保存前可取消）")) return;
+    const defaults = (await api.getDefaultActions?.()) || [];
+    if (!defaults.length) return toast("无法获取默认提示词");
+    let n = 0;
+    for (const d of defaults) {
+      const hit = actions.find((a) => a.id === d.id);
+      if (hit && hit.prompt !== d.prompt) {
+        hit.prompt = d.prompt;
+        hit.label = d.label; // 文案也一并复位（图标保留用户所选）
+        n += 1;
+      }
+    }
+    renderActions();
+    toast(n ? `已恢复 ${n} 个动作的默认提示词，点「保存」生效` : "提示词已是默认，无需恢复", 4000);
+  });
+
   $("btnSaveActions").addEventListener("click", async () => {
     settings.actions = actions.filter((a) => a.label && a.prompt);
     await api.saveSettings(settings);
@@ -807,8 +1001,10 @@
   (async function init() {
     settings = await api.getSettings();
     actions = JSON.parse(JSON.stringify(settings.actions || []));
-    $("inHotkey").value = settings.hotkeyCapture || "";
-    $("inHotkeyScan").value = settings.hotkeyScan || "";
+    // 快捷键：显示当前值 + 从主进程取注册结果（被占用时标红）
+    const hs = (await api.getHotkeyState?.()) || {};
+    renderHotkeyBtn("capture", settings.hotkeyCapture, hs.captureOk === false ? hs.captureError : "");
+    renderHotkeyBtn("scan", settings.hotkeyScan, hs.scanOk === false ? hs.scanError : "");
     $("inAutoPopup").checked = !!settings.autoPopup;
     $("inHeadless").checked = !!settings.dswebHeadless;
     $("notesDir").textContent = settings.captureDir;

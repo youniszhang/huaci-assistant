@@ -323,6 +323,63 @@ html, body {
 }
 .row-input:focus { border-color: var(--c-accent); }
 
+/* 快捷键录制按钮：点击后进入「按下组合键」状态 */
+.hotkey-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+  min-width: 132px;
+  height: 28px;
+  padding: 0 6px 0 11px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: var(--fs-caption);
+  color: var(--c-text);
+  background: var(--c-bg-panel);
+  border: 1px solid var(--c-separator);
+  border-radius: var(--r-button);
+  cursor: default;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.hotkey-btn:hover { border-color: color-mix(in srgb, var(--c-accent) 55%, var(--c-separator)); }
+.hotkey-btn .hotkey-text {
+  flex: 1 1 auto;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hotkey-btn .hotkey-clear {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--c-text-3);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.hotkey-btn:hover .hotkey-clear { opacity: 1; }
+.hotkey-btn .hotkey-clear:hover { background: var(--c-fill); color: var(--c-text); }
+/* 录入中：高亮边框 + 文案提示，明确「现在按下新的组合键」 */
+.hotkey-btn.recording {
+  color: var(--c-accent);
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+.hotkey-btn.recording .hotkey-clear { opacity: 0; pointer-events: none; }
+/* 注册失败（被占用）：红色提示，避免用户以为设置成功 */
+.hotkey-btn.conflict {
+  color: var(--c-danger);
+  border-color: var(--c-danger);
+  background: var(--c-danger-soft);
+}
+.hotkey-btn.empty .hotkey-text { color: var(--c-text-3); }
+.hotkey-btn.empty .hotkey-clear { opacity: 0; pointer-events: none; }
+
 .row-check {
   width: 16px;
   height: 16px;
@@ -760,6 +817,20 @@ html, body {
   word-break: break-word;
 }
 .hd-body.empty { color: var(--c-text-3); }
+/* 结论段：与悬浮卡片同款视觉（md.js 给首个段落加 .lead） */
+.hd-body p.lead {
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  background: var(--c-accent-soft);
+  border-left: 3px solid var(--c-accent);
+  border-radius: 0 var(--r-button) var(--r-button) 0;
+}
+.hd-body strong { font-weight: var(--fw-semibold); color: var(--c-text); }
+.hd-body table { border-collapse: collapse; width: 100%; margin: 0 0 10px; font-size: var(--fs-caption); }
+.hd-body th, .hd-body td { padding: 5px 8px; text-align: left; border-bottom: 0.5px solid var(--c-separator); }
+.hd-body pre { padding: 10px 12px; margin: 0 0 10px; overflow-x: auto; background: var(--c-fill); border-radius: var(--r-button); }
+.hd-body code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--fs-caption); }
+.hd-body ul, .hd-body ol { margin: 0 0 10px; padding-left: 20px; }
 .hd-meta {
   font-size: 10px;
   color: var(--c-text-3);

@@ -367,6 +367,22 @@ body {
 }
 .body strong {
   font-weight: var(--fw-semibold);
+  color: var(--c-text);
+}
+/* 结论段（文档第一个块）：左侧色条 + 浅底，让「最直观的解释」一眼可见。
+   与系统提示词「第一行先给一句话结论」配套。 */
+.body p.lead {
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  font-size: var(--fs-small);
+  line-height: var(--lh-normal);
+  color: var(--c-text);
+  background: var(--c-accent-soft);
+  border-left: 3px solid var(--c-accent);
+  border-radius: 0 var(--r-button) var(--r-button) 0;
+}
+.body p.lead strong {
+  font-weight: var(--fw-bold, 680);
 }
 .body em {
   font-style: normal;

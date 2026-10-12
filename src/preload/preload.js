@@ -64,6 +64,8 @@ const bridge = {
   // ---- 设置 ----
   getSettings: () => ipcRenderer.invoke(API["settings:get"]),
   saveSettings: (payload) => ipcRenderer.invoke(API["settings:save"], payload),
+  getHotkeyState: () => ipcRenderer.invoke(API["settings:hotkey-state"]),
+  getDefaultActions: () => ipcRenderer.invoke(API["settings:default-actions"]),
   pickVault: () => ipcRenderer.invoke(API["system:pick-vault"]),
   openExternal: (url) => ipcRenderer.invoke(API["system:open-external"], { url }),
 

@@ -40,7 +40,7 @@
       </button>
     </nav>
     <div class="side-foot">
-      <span class="version">v0.1.4</span>
+      <span class="version">v0.1.5</span>
     </div>
   </aside>
 
@@ -147,23 +147,29 @@
         <div class="row-item">
           <div class="row-main">
             <div class="row-label">取词快捷键</div>
-            <div class="row-detail">选中文字后按下即取词，留空则不注册</div>
+            <div class="row-detail" id="hotkeyCaptureHint">选中文字后按下即唤起工具条，点右侧按钮后直接按组合键修改</div>
           </div>
-          <input type="text" class="row-input" id="inHotkey" placeholder="未设置" />
+          <button class="hotkey-btn" id="hotkeyCapture" data-hotkey="capture" title="点击后按下新的组合键">
+            <span class="hotkey-text">未设置</span>
+            <span class="hotkey-clear" data-clear="capture" title="清除">×</span>
+          </button>
         </div>
         <div class="row-item">
           <div class="row-main">
             <div class="row-label">框选分析快捷键</div>
-            <div class="row-detail">按下后拖拽框选屏幕区域，OCR 识别并分析（聊天/图片/PDF）</div>
+            <div class="row-detail" id="hotkeyScanHint">按下后拖拽框选屏幕区域，OCR 识别并分析（聊天/图片/PDF）</div>
           </div>
-          <input type="text" class="row-input" id="inHotkeyScan" placeholder="未设置" />
+          <button class="hotkey-btn" id="hotkeyScan" data-hotkey="scan" title="点击后按下新的组合键">
+            <span class="hotkey-text">未设置</span>
+            <span class="hotkey-clear" data-clear="scan" title="清除">×</span>
+          </button>
         </div>
         <label class="row-item row-clickable">
           <div class="row-main">
             <div class="row-label">划词后自动弹出工具条</div>
-            <div class="row-detail">关闭后只能用快捷键触发</div>
+            <div class="row-detail">默认关闭：选中文字后按取词快捷键唤起，避免拖拽选字时被打扰</div>
           </div>
-          <input type="checkbox" class="row-check" id="inAutoPopup" checked />
+          <input type="checkbox" class="row-check" id="inAutoPopup" />
         </label>
         <label class="row-item row-clickable">
           <div class="row-main">
@@ -280,6 +286,7 @@
       <div class="list" id="actionList"></div>
       <div class="toolbar-row">
         <button class="btn" id="btnAddAction">新增动作</button>
+        <button class="btn quiet" id="btnResetActions" title="把五个预设动作的提示词恢复为「结论置顶 + 关键词加粗」的默认结构">恢复默认提示词</button>
         <span class="spacer"></span>
         <button class="btn primary" id="btnSaveActions">保存</button>
       </div>

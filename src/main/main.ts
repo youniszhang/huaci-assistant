@@ -26,7 +26,7 @@ import {
 	NewProviderInput,
 	ProviderPatch,
 } from "./obsidian";
-import { AppSettings, fillTemplate, loadSettings, saveSettings } from "./settings";
+import { AppSettings, fillTemplate, loadSettings, saveSettings, DEFAULT_ACTIONS } from "./settings";
 import { listCaptures, readCapture, writeCapture, sanitizeBody, annotationTitle } from "./note";
 import { runLlm, SYSTEM_PROMPT, ChatMessage, ensureBrowser, killBrowser, connectDeepSeek, checkLogin, openLoginPage, probeLoginStatus } from "./llm";
 import { ResolvedProvider, DEFAULT_DSWEB_PORT } from "./llm/types";
@@ -1152,8 +1152,15 @@ function registerIpc(): void {
 		saveSettings(settings);
 		registerHotkey();
 		rebuildTrayMenu();
-		return { ok: true, settings };
+		// 把注册结果回传：设置页据此提示「被其它应用占用」等（不再静默失败）
+		return { ok: true, settings, hotkeys: hotkeyState };
 	});
+
+	// 快捷键当前状态（设置页初始化时显示是否注册成功）
+	ipcMain.handle(ch("settings:hotkey-state"), () => hotkeyState);
+
+	// 预设动作的默认提示词（供设置页「恢复默认提示词」使用）
+	ipcMain.handle(ch("settings:default-actions"), () => DEFAULT_ACTIONS);
 
 	ipcMain.handle(ch("system:pick-vault"), async () => {
 		const res = await dialog.showOpenDialog({
@@ -1222,29 +1229,53 @@ function registerIpc(): void {
 
 // ---------------------------------------------------------------- 快捷键
 
+export interface HotkeyState {
+	/** 取词快捷键当前值（空 = 未设置） */
+	capture: string;
+	/** 框选快捷键当前值 */
+	scan: string;
+	/** 取词快捷键是否注册成功（未设置时为 true，表示「无需注册」） */
+	captureOk: boolean;
+	scanOk: boolean;
+	/** 注册失败原因（如被占用 / 格式非法） */
+	captureError?: string;
+	scanError?: string;
+}
+
+/** 最近一次快捷键注册结果（设置页据此提示「被占用」等） */
+let hotkeyState: HotkeyState = { capture: "", scan: "", captureOk: true, scanOk: true };
+
 function registerHotkey(): void {
 	globalShortcut.unregisterAll();
+	hotkeyState = {
+		capture: settings.hotkeyCapture || "",
+		scan: settings.hotkeyScan || "",
+		captureOk: true,
+		scanOk: true,
+	};
 	/** 注册单个快捷键；返回是否成功。失败原因（被占用/格式错误）必须可见 —— 之前静默吞掉导致「重启后不能用」无从排查 */
-	const registerOne = (accelerator: string, action: () => void, label: string): boolean => {
-		if (!accelerator) return true;
+	const registerOne = (accelerator: string, action: () => void, label: string): { ok: boolean; error?: string } => {
+		if (!accelerator) return { ok: true };
 		try {
 			// globalShortcut.register 返回 false 表示被其它 app 占用或格式非法，不抛异常
 			const ok = globalShortcut.register(accelerator, action);
 			if (!ok) {
-				console.error(`[hotkey] 注册失败（被占用或格式非法）：${accelerator}（${label}）`);
+				const error = "已被其它应用占用（或格式不支持），请换一个组合";
+				console.error(`[hotkey] 注册失败：${accelerator}（${label}）—— ${error}`);
 				overlay.send(ch("overlay:error"), {
-					message: `⚠️ 快捷键 ${accelerator} 注册失败（可能被其它应用占用），请在设置里更换`,
+					message: `⚠️ 快捷键 ${accelerator} 注册失败（${error}）`,
 				});
-			} else {
-				console.log(`[hotkey] 已注册：${accelerator}（${label}）`);
+				return { ok: false, error };
 			}
-			return ok;
+			console.log(`[hotkey] 已注册：${accelerator}（${label}）`);
+			return { ok: true };
 		} catch (err) {
-			console.error(`[hotkey] 注册异常：${accelerator}（${label}）：${(err as Error).message}`);
-			return false;
+			const error = (err as Error).message;
+			console.error(`[hotkey] 注册异常：${accelerator}（${label}）：${error}`);
+			return { ok: false, error };
 		}
 	};
-	registerOne(
+	const cap = registerOne(
 		settings.hotkeyCapture,
 		() => {
 			// 手动取词：autoPopup 关闭时也放行本次划词（见 capture.on("selection")）
@@ -1253,7 +1284,11 @@ function registerHotkey(): void {
 		},
 		"立即取词"
 	);
-	registerOne(settings.hotkeyScan, () => void scanRegionAndAnalyze(), "框选分析");
+	hotkeyState.captureOk = cap.ok;
+	hotkeyState.captureError = cap.error;
+	const scan = registerOne(settings.hotkeyScan, () => void scanRegionAndAnalyze(), "框选分析");
+	hotkeyState.scanOk = scan.ok;
+	hotkeyState.scanError = scan.error;
 }
 
 // ---------------------------------------------------------------- 生命周期

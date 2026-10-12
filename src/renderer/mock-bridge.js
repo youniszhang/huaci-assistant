@@ -40,7 +40,7 @@
     preferredProviderId: "",
     captureDir: "04-日常记录/AI划词解释",
     calloutType: "note",
-    autoPopup: true,
+    autoPopup: false,
     hotkeyCapture: "CommandOrControl+Shift+E",
     actions: [
       { id: "explain", label: "解释", icon: "✨", prompt: "解释 {{selection}}" },
@@ -203,7 +203,14 @@
     clearHistory: async () => ({ ok: true }),
 
     getSettings: async () => mockSettings,
-    saveSettings: async (s) => ({ ok: true, settings: Object.assign(mockSettings, s) }),
+    saveSettings: async (s) => ({ ok: true, settings: Object.assign(mockSettings, s), hotkeys: { capture: (s && s.hotkeyCapture) || "CommandOrControl+Shift+E", scan: (s && s.hotkeyScan) || "CommandOrControl+Shift+S", captureOk: true, scanOk: true } }),
+    getHotkeyState: async () => ({ capture: mockSettings.hotkeyCapture || "", scan: mockSettings.hotkeyScan || "", captureOk: true, scanOk: true }),
+    getDefaultActions: async () => mockSettings.actions.map((a, i) => ({
+      id: a.id,
+      label: a.label,
+      icon: a.icon,
+      prompt: "（mock）默认提示词：" + a.label + "\n\n【选中内容】\n{{selection}}",
+    })),
     pickVault: async () => ({ ok: false }),
     openExternal: async () => true,
 
