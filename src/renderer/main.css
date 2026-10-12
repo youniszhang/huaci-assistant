@@ -815,6 +815,9 @@ html, body {
   line-height: var(--lh-loose);
   color: var(--c-text);
   word-break: break-word;
+  /* 显式声明可选中：生成的内容要能选中后右键复制（默认 auto 在部分场景不可选） */
+  user-select: text;
+  cursor: auto;
 }
 .hd-body.empty { color: var(--c-text-3); }
 /* 结论段：与悬浮卡片同款视觉（md.js 给首个段落加 .lead） */

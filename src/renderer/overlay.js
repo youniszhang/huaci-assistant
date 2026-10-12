@@ -150,6 +150,15 @@
   // 工具条关闭：选区消失会收起工具条，这里也提供手动关闭
   btnTbClose.addEventListener("click", () => api.hideOverlay());
 
+  // ------------------------------------------------ 右键菜单支持
+  //
+  // 主进程的 context-menu 处理器需要知道「当前是否有选中文字」来决定菜单项
+  // （params.selectionText 在部分输入路径下恒为空）。渲染层在右键时同步上报。
+  document.addEventListener("contextmenu", () => {
+    const s = window.getSelection ? String(window.getSelection().toString() || "") : "";
+    window.huaci.reportContextMenu(s.trim().length > 0);
+  }, true);
+
   // ------------------------------------------------ JS 拖动
   //
   // 不用 -webkit-app-region：透明 + focusable:false 窗口上行为不稳定，

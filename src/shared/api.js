@@ -64,6 +64,7 @@ const API = {
   'system:pick-vault': 'system:pick-vault',
   'system:open-external': 'system:open-external',
   'system:diag': 'system:diag',
+  'system:ctx-selection': 'system:ctx-selection',  // renderer → main：右键时的选区状态
 }
 
 module.exports = { API }

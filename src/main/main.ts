@@ -341,11 +341,16 @@ capture.on("selection", (ev: SelectionEvent) => {
 	console.log(`[selection] app=${ev.app} len=${text.length} pos=(${Math.round(ev.x)},${Math.round(ev.y)}) text="${text.slice(0, 40)}"`);
 	// 去抖：同一段文本 1.2s 内只处理一次；且过短视为误触
 	const now = Date.now();
-	if (text === lastSelection && now - lastSelectionAt < 1200) return;
+	// 手动取词（快捷键/托盘/设置页）必须跳过这层去抖：划词动作本身会先产生一次
+	// selection 事件（autoPopup 关闭时被忽略但已记录时间戳），用户紧接着按快捷键时
+	// 同一段文本仍在去抖窗口内 → 被误判为重复而丢弃，表现为「按第一下没反应、
+	// 要按第二下才弹出」。
+	const isManual = now - lastManualCaptureAt <= 2000;
+	if (!isManual && text === lastSelection && now - lastSelectionAt < 1200) return;
 	if (text.length < 2) return;
 	// autoPopup=false（「划词后自动弹出工具条」关闭）：划词不再自动弹，
 	// 仅快捷键 / 托盘 / 设置页的手动「立即取词」触发（2s 内的 selection）才弹
-	if (!settings.autoPopup && now - lastManualCaptureAt > 2000) {
+	if (!settings.autoPopup && !isManual) {
 		lastSelection = text;
 		lastSelectionAt = now;
 		console.log("[selection] autoPopup 已关闭，忽略非手动取词");
@@ -861,6 +866,66 @@ function saveSession(): { ok: boolean; file?: string; replaced?: boolean; messag
 
 // ---------------------------------------------------------------- IPC
 
+/**
+ * 全局右键菜单（复制 / 全选 / 查找）。
+ *
+ * Electron 默认不提供右键菜单 —— 划词卡片里生成的内容虽然能选中，但右键没反应，
+ * 想复制一段只能靠卡片底部的「复制」按钮（那是整篇复制）。这里为所有窗口挂上
+ * 标准编辑菜单，选中文字后可直接右键复制。
+ */
+/**
+ * 渲染层在右键时同步上报的选区状态（见 preload.reportContextMenu）。
+ * 按 webContents id 隔离：主窗口与悬浮卡片是两个窗口，共用全局变量会串味
+ * （在一个窗口选中文字后，另一个窗口右键也会误判为「有选中」）。
+ */
+const ctxSelectionByWc = new Map<number, boolean>();
+
+function installContextMenu(): void {
+	app.on("web-contents-created", (_e, contents) => {
+		contents.on("context-menu", (_ev, params) => {
+			const { editFlags, isEditable } = params;
+			// selectionText 在部分场景下为空（实测：合成输入事件路径下恒为空），
+			// 只依赖它会导致「明明选中了文字，右键却只有全选」。改为以渲染层实时
+			// 选区为准，params.selectionText 仅作快速路径。
+			// 选区状态来源优先级：
+			//  1) 渲染层在 contextmenu 时同步上报的值（最可靠：时序与用户操作一致）
+			//  2) params.selectionText（部分输入路径下恒为空，作兜底）
+			let hasSelection = ctxSelectionByWc.get(contents.id) === true;
+			if (!hasSelection && !isEditable) {
+				hasSelection = !!(params.selectionText && params.selectionText.trim());
+			}
+			ctxSelectionByWc.set(contents.id, false); // 用后即清，避免状态残留
+			// 便于排查菜单项不符预期的情况（例如选中了文字却只看到「全选」）
+			// 便于排查菜单项不符预期（例如选中文字却只有「全选」）
+			if (!hasSelection) console.log(`[context-menu] 无选中（isEditable=${isEditable}），仅提供全选`);
+			const items: Electron.MenuItemConstructorOptions[] = [];
+			// 可编辑区域（追问输入框等）：给完整的编辑菜单
+			if (isEditable) {
+				items.push(
+					{ role: "undo", label: "撤销", enabled: editFlags.canUndo },
+					{ role: "redo", label: "重做", enabled: editFlags.canRedo },
+					{ type: "separator" },
+					{ role: "cut", label: "剪切", enabled: editFlags.canCut },
+					{ role: "copy", label: "复制", enabled: editFlags.canCopy },
+					{ role: "paste", label: "粘贴", enabled: editFlags.canPaste },
+					{ role: "selectAll", label: "全选", enabled: editFlags.canSelectAll }
+				);
+			} else if (hasSelection) {
+				// 非编辑区但有选中文字（生成结果正文）：复制 + 全选
+				items.push(
+					{ role: "copy", label: "复制" },
+					{ role: "selectAll", label: "全选" }
+				);
+			} else {
+				// 无选中内容：只给全选（便于一键选中整段结果）
+				items.push({ role: "selectAll", label: "全选" });
+			}
+			if (!items.length) return;
+			Menu.buildFromTemplate(items).popup({ window: BrowserWindow.fromWebContents(contents) ?? undefined });
+		});
+	});
+}
+
 function registerIpc(): void {
 	// 划词状态
 	ipcMain.handle(ch("capture:status"), () => ({
@@ -1187,6 +1252,11 @@ function registerIpc(): void {
 		console.log("[renderer]", msg);
 	});
 
+	// 右键时的选区状态（渲染层上报，供 installContextMenu 决定菜单项）
+	ipcMain.on(ch("system:ctx-selection"), (e, payload: { hasSelection: boolean }) => {
+		ctxSelectionByWc.set(e.sender.id, !!(payload && payload.hasSelection));
+	});
+
 	// 笔记
 	ipcMain.handle(ch("notes:list"), () => {
 		const v = pickVault(settings.vaultPath || undefined);
@@ -1326,6 +1396,8 @@ if (!gotLock) {
 			console.error(`[lifecycle] 首次导入失败（不影响使用）：${(err as Error).message}`);
 		}
 		registerIpc();
+		// 右键菜单需在窗口创建前挂载（监听 web-contents-created，对之后所有窗口生效）
+		installContextMenu();
 		createTray();
 		capture.start();
 		registerHotkey();

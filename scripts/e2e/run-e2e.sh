@@ -10,6 +10,8 @@
 #   bash scripts/e2e/run-e2e.sh dsweb-provider     # 只跑供应商条目补建（纯文件）
 #   bash scripts/e2e/run-e2e.sh provider-crud      # 只跑供应商增删改（纯文件）
 #   bash scripts/e2e/run-e2e.sh hotkey-lead        # 快捷键录制 + 结论置顶渲染
+#   bash scripts/e2e/run-e2e.sh hotkey-firstpress  # 手动取词一次即弹（按两下问题）
+#   bash scripts/e2e/run-e2e.sh context-menu       # 右键菜单（复制/全选）
 #   （provider-ui 需要手动准备临时 vault，见脚本头部说明）
 #
 # 关键点：
@@ -128,6 +130,13 @@ for CASE in "${CASES[@]}"; do
       ;;
     v011)
       WS_PATH="$ROOT/node_modules/ws" node scripts/e2e/e2e-v011.js || RC=1
+      ;;
+    hotkey-firstpress)
+      # 前置：autoPopup 需为 true 以创建 overlay 窗口（用例内会自行切 false）
+      WS_PATH="$ROOT/node_modules/ws" node scripts/e2e/e2e-hotkey-firstpress.js || RC=1
+      ;;
+    context-menu)
+      WS_PATH="$ROOT/node_modules/ws" node scripts/e2e/e2e-context-menu.js || RC=1
       ;;
     *)
       echo "未知用例: $CASE（可用: lifecycle v011）"; RC=1
