@@ -15,7 +15,7 @@ export interface ProviderConfig {
 	ptype?: "api" | "dsweb";
 	/** 支持图片识别 */
 	vision?: boolean;
-	/** dsweb：CDP 调试端口（默认 9223） */
+	/** dsweb：CDP 调试端口（默认 9224，与 Obsidian 插件的 9223 分开） */
 	dswebPort?: number;
 	/** dsweb：专家模式（深度思考），默认开 */
 	expertMode?: boolean;
@@ -51,5 +51,9 @@ export interface ResolvedProvider extends ProviderConfig {
 	sourceVault?: string;
 }
 
-/** dsweb 默认端口（与插件一致，便于复用同一浏览器登录态） */
-export const DEFAULT_DSWEB_PORT = 9223;
+/**
+ * dsweb 默认端口。
+ * 桌面端使用 9224（独立于 Obsidian 插件的 9223）：两边各自启动专用浏览器，
+ * 登录态与实例互不干扰，可同时使用。
+ */
+export const DEFAULT_DSWEB_PORT = 9224;

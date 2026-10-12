@@ -68,10 +68,16 @@ export function findBrowserBinary(): string | null {
 	return null;
 }
 
-/** 专用浏览器 profile 目录（与 Obsidian 插件共用，故两边登录态互通） */
+/** 专用浏览器 profile 目录（桌面端自己的登录态，与 Obsidian 插件互不影响） */
 function profileDir(): string {
-	// 环境变量仅用于测试隔离（避免测试污染真实登录态）；正常情况走默认路径
-	return process.env.HUACI_DSWEB_PROFILE || path.join(os.tmpdir(), "aie-dsweb-profile");
+	// 环境变量仅用于测试隔离（避免测试污染真实登录态）
+	if (process.env.HUACI_DSWEB_PROFILE) return process.env.HUACI_DSWEB_PROFILE;
+	// 桌面端独立 profile：放在 userData 下（不是 tmpdir），
+	// 不再与 Obsidian 插件共用 aie-dsweb-profile —— 两边登录态/端口互不影响。
+	// 说明：早期共用是为了「插件登录过就能直接用」，但也带来耦合
+	// （插件退出/清理 tmpdir 会影响桌面端；两边同时用还会抢同一浏览器实例）。
+	const base = process.env.HUACI_USER_DATA || path.join(os.homedir(), "Library", "Application Support", "划词助手");
+	return path.join(base, "dsweb-profile");
 }
 
 /** 启动专用浏览器（独立 profile，登录态持久）。已启动则复用。headless=后台不可见 */

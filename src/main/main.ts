@@ -14,18 +14,23 @@ import * as fs from "fs";
 import * as path from "path";
 import { SelectionCapture, SelectionEvent, ClickEvent, helperPath, ScreenRect, OcrResult } from "./capture";
 import { OverlayWindow, OverlayPosition, RegionOverlay } from "./overlay";
+import { listVaults, loadProviders, pickVault, loadExplainerSettings } from "./obsidian";
 import {
-	listVaults,
-	loadProviders,
-	pickVault,
-	ProviderBundle,
-	ensureDswebProvider,
+	loadStore,
+	saveStore,
+	ensureImported,
+	activeOf,
+	isUsable,
+	storePath,
 	addProvider,
 	updateProvider,
 	deleteProvider,
+	ensureDswebProvider,
+	setActive as setActiveProvider,
+	ProviderStore,
 	NewProviderInput,
 	ProviderPatch,
-} from "./obsidian";
+} from "./providers";
 import { AppSettings, fillTemplate, loadSettings, saveSettings, DEFAULT_ACTIONS } from "./settings";
 import { listCaptures, readCapture, writeCapture, sanitizeBody, annotationTitle } from "./note";
 import { runLlm, SYSTEM_PROMPT, ChatMessage, ensureBrowser, killBrowser, connectDeepSeek, checkLogin, openLoginPage, probeLoginStatus } from "./llm";
@@ -158,22 +163,23 @@ let lastSelectionAt = 0;
 let lastManualCaptureAt = 0;
 
 // ---------------------------------------------------------------- 配置
+//
+// 供应商配置已独立于 Obsidian：存在本机 <userData>/providers.json（见 providers.ts）。
+// Obsidian 只用于「笔记写入」与「首次运行一次性导入」，两边配置互不影响。
 
-function resolveBundle(): ProviderBundle | null {
-	const v = pickVault(settings.vaultPath || undefined);
-	if (!v) return null;
-	return loadProviders(v.path);
+/** 读取本机供应商配置（必要时做首次导入） */
+function providerStore(): ProviderStore {
+	return loadStore();
 }
 
 function activeProvider(): ResolvedProvider | null {
-	const bundle = resolveBundle();
-	if (!bundle) return null;
-	// 用户在桌面助手里手动指定优先的供应商
+	const store = providerStore();
+	// 桌面端手动指定的优先供应商（settings.preferredProviderId）优先于 activeProviderId
 	if (settings.preferredProviderId) {
-		const hit = bundle.providers.find((p) => p.id === settings.preferredProviderId && p.enabled);
-		if (hit) return hit;
+		const hit = store.providers.find((p) => p.id === settings.preferredProviderId && p.enabled);
+		if (hit) return { ...hit };
 	}
-	return bundle.active;
+	return activeOf(store);
 }
 
 function currentModel(p: ResolvedProvider | undefined): string | undefined {
@@ -181,10 +187,11 @@ function currentModel(p: ResolvedProvider | undefined): string | undefined {
 	if (p.ptype === "dsweb") {
 		return p.models?.find((m) => m.includes("专家")) ?? p.models?.[0];
 	}
-	// api：沿用插件 activeModel（若在该供应商的 models 里），否则第一个
-	const bundle = resolveBundle();
-	const pluginActive = bundle?.settings.activeModel;
-	if (pluginActive && p.models?.includes(pluginActive)) return pluginActive;
+	// api：用本机配置里记录的 activeModel（若属于该供应商），否则第一个模型
+	const store = providerStore();
+	if (store.activeProviderId === p.id && store.activeModel && p.models?.includes(store.activeModel)) {
+		return store.activeModel;
+	}
 	return p.models?.[0];
 }
 
@@ -258,7 +265,6 @@ function createTray(): void {
 
 function rebuildTrayMenu(): void {
 	if (!tray) return;
-	const bundle = resolveBundle();
 	const p = activeProvider();
 	const modelNote = p
 		? `${p.name}${p.ptype === "dsweb" ? "（网页版）" : ""}`
@@ -832,7 +838,7 @@ function saveSession(): { ok: boolean; file?: string; replaced?: boolean; messag
 	if (!content) return { ok: false, message: "内容为空，无法保存" };
 	const v = pickVault(settings.vaultPath || undefined);
 	if (!v) return { ok: false, message: "未找到 Obsidian vault，请先在设置里选择" };
-	const bundle = loadProviders(v.path);
+	const pluginSettings = loadExplainerSettings(v.path);
 	try {
 		const res = writeCapture(
 			v.path,
@@ -843,7 +849,7 @@ function saveSession(): { ok: boolean; file?: string; replaced?: boolean; messag
 				sourceApp: session.app || undefined,
 				model: session.model ? `${session.provider?.name ?? ""} ${session.model}`.trim() : session.provider?.name,
 			},
-			{ calloutType: settings.calloutType ?? bundle?.settings.calloutType ?? "note", dir: settings.captureDir }
+			{ calloutType: settings.calloutType ?? pluginSettings?.calloutType ?? "note", dir: settings.captureDir }
 		);
 		// 关联的历史记录回标「已录入」
 		if (session.historyId) updateHistory(session.historyId, { saved: true });
@@ -964,31 +970,39 @@ function registerIpc(): void {
 	});
 
 	ipcMain.handle(ch("config:providers"), () => {
-		const bundle = resolveBundle();
-		if (!bundle) return { providers: [], settings: null, vaultPath: null };
+		// 供应商来自本机独立配置（不再依赖 Obsidian vault）
+		const store = providerStore();
+		const vault = pickVault(settings.vaultPath || undefined);
 		return {
-			providers: bundle.providers.map((p) => ({
+			providers: store.providers.map((p) => ({
 				...p,
-				usable: p.ptype === "dsweb" ? true : !!(p.baseURL && p.apiKey && p.models?.length),
+				usable: isUsable(p).ok,
 			})),
-			activeId: bundle.active?.id ?? "",
-			activeModel: bundle.settings.activeModel,
-			vaultPath: bundle.vaultPath,
-			pluginInsertMode: bundle.settings.insertMode,
-			pluginCalloutType: bundle.settings.calloutType,
+			activeId: store.activeProviderId,
+			activeModel: store.activeModel,
+			/** 本机配置路径（UI 展示「配置来源」） */
+			storePath: storePath(),
+			/** 首次导入来源（仅展示，便于理解数据从哪来） */
+			importedFromVault: store.importedFromVault,
+			// 以下为笔记写入相关（仍来自 Obsidian，用于「划词记录」等）
+			vaultPath: vault?.path ?? null,
+			pluginInsertMode: vault ? loadExplainerSettings(vault.path)?.insertMode : undefined,
+			pluginCalloutType: vault ? loadExplainerSettings(vault.path)?.calloutType : undefined,
 		};
 	});
 
 	ipcMain.handle(ch("config:set-provider"), (_e, payload: { id: string }) => {
-		settings.preferredProviderId = payload?.id ?? "";
+		// 切换使用中的供应商（写本机配置；preferredProviderId 留作兼容，同步清空避免歧义）
+		settings.preferredProviderId = "";
 		saveSettings(settings);
+		const res = setActiveProvider(String(payload?.id ?? ""));
 		rebuildTrayMenu();
-		return { ok: true };
+		return res;
 	});
 
 	ipcMain.handle(ch("config:test-provider"), async (_e, payload: { id: string }) => {
-		const bundle = resolveBundle();
-		const p = bundle?.providers.find((x) => x.id === payload?.id);
+		const store = providerStore();
+		const p = store.providers.find((x) => x.id === payload?.id);
 		if (!p) return { ok: false, message: "供应商不存在" };
 		const started = Date.now();
 		try {
@@ -1035,19 +1049,17 @@ function registerIpc(): void {
 			// 浏览器 profile，CDP 专用 profile 读不到 → 「登录了但助手仍说未登录」。
 			await openLoginPage(port);
 			void notifyDswebStatus({ state: "waiting", message: "已在专用浏览器打开登录页，请完成登录" });
-			// 补齐供应商条目：插件配置里若没有 ptype=dsweb 的条目，登录成功后
-			// 列表里也没有它可选（登录态有效却无处可用）——这里自动补建并切为使用中
-			const v = pickVault(settings.vaultPath || undefined);
+			// 补齐供应商条目：本机配置里若没有 ptype=dsweb 的条目，登录成功后
+			// 列表里也没有它可选（登录态有效却无处可用）——这里自动补建并切为使用中。
+			// 写入本机 providers.json，不碰 Obsidian 插件配置。
 			let created = false;
-			if (v) {
-				const res = ensureDswebProvider(v.path, { port, activate: true });
-				if (res.ok && res.created) {
-					created = true;
-					rebuildTrayMenu();
-					console.log("[dsweb-login] 已自动补建 DeepSeek 网页版供应商并切为使用中");
-				} else if (!res.ok) {
-					console.error(`[dsweb-login] 补建供应商失败：${res.message}`);
-				}
+			const res = ensureDswebProvider({ port, activate: true });
+			if (res.ok && res.created) {
+				created = true;
+				rebuildTrayMenu();
+				console.log("[dsweb-login] 已自动补建 DeepSeek 网页版供应商并切为使用中");
+			} else if (!res.ok) {
+				console.error(`[dsweb-login] 补建供应商失败：${res.message}`);
 			}
 			return {
 				ok: true,
@@ -1063,9 +1075,7 @@ function registerIpc(): void {
 
 	// 手动补建 DeepSeek 网页版供应商条目（供应商页在缺条目时提供入口）
 	ipcMain.handle(ch("config:add-dsweb-provider"), () => {
-		const v = pickVault(settings.vaultPath || undefined);
-		if (!v) return { ok: false, message: "未找到 Obsidian vault，请先在状态页选择笔记库" };
-		const res = ensureDswebProvider(v.path, { port: DEFAULT_DSWEB_PORT, activate: true });
+		const res = ensureDswebProvider({ port: DEFAULT_DSWEB_PORT, activate: true });
 		if (res.ok) {
 			rebuildTrayMenu();
 			return {
@@ -1079,11 +1089,9 @@ function registerIpc(): void {
 		return res;
 	});
 
-	// 供应商增删改（写回插件 data.json，供桌面端直接管理，无需回 Obsidian 操作）
+	// 供应商增删改（写本机 providers.json，与 Obsidian 配置互不影响）
 	ipcMain.handle(ch("config:add-provider"), (_e, payload: NewProviderInput) => {
-		const v = pickVault(settings.vaultPath || undefined);
-		if (!v) return { ok: false, message: "未找到 Obsidian vault，请先在状态页选择笔记库" };
-		const res = addProvider(v.path, payload ?? {});
+		const res = addProvider(payload ?? {});
 		if (res.ok) {
 			rebuildTrayMenu();
 			console.log(`[config:add-provider] 已新增供应商 id=${res.id}`);
@@ -1092,24 +1100,20 @@ function registerIpc(): void {
 	});
 
 	ipcMain.handle(ch("config:update-provider"), (_e, payload: { id: string } & ProviderPatch) => {
-		const v = pickVault(settings.vaultPath || undefined);
-		if (!v) return { ok: false, message: "未找到 Obsidian vault，请先在状态页选择笔记库" };
 		const { id, ...patch } = payload ?? { id: "" };
-		const res = updateProvider(v.path, String(id ?? ""), patch);
+		const res = updateProvider(String(id ?? ""), patch);
 		if (res.ok) rebuildTrayMenu();
 		return res;
 	});
 
 	ipcMain.handle(ch("config:delete-provider"), (_e, payload: { id: string }) => {
-		const v = pickVault(settings.vaultPath || undefined);
-		if (!v) return { ok: false, message: "未找到 Obsidian vault，请先在状态页选择笔记库" };
 		const id = String(payload?.id ?? "");
 		// 删的是当前指定的优先供应商 → 清掉这个偏好，否则会指向不存在的 id
 		if (settings.preferredProviderId === id) {
 			settings.preferredProviderId = "";
 			saveSettings(settings);
 		}
-		const res = deleteProvider(v.path, id);
+		const res = deleteProvider(id);
 		if (res.ok) {
 			rebuildTrayMenu();
 			console.log(`[config:delete-provider] 已删除供应商 id=${id}`);
@@ -1312,6 +1316,15 @@ if (!gotLock) {
 	app.whenReady().then(() => {
 		console.log(`[lifecycle] app 就绪，版本=${app.getVersion()}，userData=${app.getPath("userData")}`);
 		applyDevDockIcon();
+		// 首次运行：把 Obsidian 插件里已有的供应商导入一份作为起点（只读插件配置，不写）
+		// 之后两边完全独立；没有 vault 或没有供应商时跳过，用户可直接在供应商页新增。
+		try {
+			const v = pickVault(settings.vaultPath || undefined);
+			const r = ensureImported(v?.path);
+			if (r.imported) console.log(`[lifecycle] 已从 Obsidian 导入 ${r.count} 个供应商（本机独立配置）`);
+		} catch (err) {
+			console.error(`[lifecycle] 首次导入失败（不影响使用）：${(err as Error).message}`);
+		}
 		registerIpc();
 		createTray();
 		capture.start();

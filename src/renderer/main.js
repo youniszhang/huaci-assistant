@@ -435,9 +435,10 @@
       Icons && Icons.hydrate(hintEl);
     }
 
-    $("providerHint").textContent = vaultPath
-      ? `配置来源：${shortPath(vaultPath)}/.obsidian/plugins/ai-explainer/data.json`
-      : "";
+    // 配置来源：本机 providers.json（不再依赖 Obsidian）
+    const src2 = res.storePath ? shortPath(res.storePath) : "";
+    const imported = res.importedFromVault ? `（首次从 ${shortPath(res.importedFromVault)} 导入）` : "";
+    $("providerHint").textContent = src2 ? `配置来源：${src2}${imported} · 与 Obsidian 插件互不影响` : "";
   }
 
   // 补建 DeepSeek 网页版供应商（写回插件 data.json 并切为使用中）
@@ -665,8 +666,11 @@
   });
 
   $("btnFollowPlugin").addEventListener("click", async () => {
-    await api.setProvider({ id: "" });
-    toast("已改为跟随插件设置");
+    // 取消「手动指定」：用列表里当前 active 的供应商（本机配置里的 activeProviderId）
+    const cur = providers.find((p) => p.id === activeId) || providers[0];
+    if (!cur) return toast("没有可用供应商");
+    await api.setProvider({ id: cur.id });
+    toast("已取消手动指定");
     loadProviders();
     loadStatus();
   });

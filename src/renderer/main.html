@@ -40,7 +40,7 @@
       </button>
     </nav>
     <div class="side-foot">
-      <span class="version">v0.1.5</span>
+      <span class="version">v0.2.0</span>
     </div>
   </aside>
 
@@ -186,14 +186,14 @@
       <header class="page-head">
         <h1>供应商</h1>
         <p class="page-desc">
-          读取 Obsidian <code>ai-explainer</code> 插件的配置，自动同步
+          本机独立配置，与 Obsidian 插件互不影响（首次运行会导入一次插件里已有的供应商）
         </p>
       </header>
       <div class="list" id="providerList"></div>
       <div class="hint hidden" id="dswebMissingHint"></div>
       <div class="toolbar-row">
         <button class="btn" id="btnAddProvider">新增供应商</button>
-        <button class="btn quiet" id="btnFollowPlugin">跟随插件设置</button>
+        <button class="btn quiet" id="btnFollowPlugin" title="清除手动指定，用列表里「使用中」的那个供应商">取消手动指定</button>
         <button class="btn quiet" id="btnDswebLogin">登录网页版</button>
         <button class="btn quiet" id="btnDswebCheck">检查登录状态</button>
         <button class="btn quiet" id="btnDswebLogout">关闭浏览器</button>

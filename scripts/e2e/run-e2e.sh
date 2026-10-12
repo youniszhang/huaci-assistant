@@ -44,6 +44,11 @@ if [ "${CASES[*]}" = "provider-crud" ]; then
   node "$ROOT/scripts/e2e/e2e-provider-crud.js"
   exit $?
 fi
+if [ "${CASES[*]}" = "provider-independence" ]; then
+  echo "======== 用例: provider-independence（供应商配置独立，纯文件） ========"
+  node "$ROOT/scripts/e2e/e2e-provider-independence.js"
+  exit $?
+fi
 if [ "${CASES[*]}" = "hotkey-lead" ]; then
   # 快捷键录制 + 结论置顶：需要独立实例（会改隔离 userData 的快捷键设置）
   DIR2=/tmp/huaci-v015
