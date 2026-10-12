@@ -424,6 +424,8 @@ html, body {
   padding: 0 9px;
   font-size: var(--fs-caption);
 }
+.btn.danger { color: var(--c-danger); }
+.btn.danger:hover { background: var(--c-danger-soft); color: var(--c-danger); }
 
 /* 动作编辑行 */
 .action-row {
@@ -762,6 +764,112 @@ html, body {
   font-size: 10px;
   color: var(--c-text-3);
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------------- 弹窗（新增/编辑供应商） ---------------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-5, 24px);
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(2px);
+}
+.modal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 460px;
+  max-height: 86vh;
+  background: var(--c-bg-panel);
+  border: 0.5px solid var(--c-separator);
+  border-radius: var(--r-popover);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+  padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4);
+  border-bottom: 0.5px solid var(--c-separator);
+}
+.modal-head h2 {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+}
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+  overflow-y: auto;
+}
+.modal-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 0.5px solid var(--c-separator);
+}
+.modal-foot .spacer { flex: 1 1 auto; }
+.modal-msg {
+  font-size: var(--fs-caption);
+  color: var(--c-danger);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--c-text-2);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-button);
+  cursor: default;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.icon-btn:hover { background: var(--c-fill); color: var(--c-text); }
+.icon-btn:active { transform: scale(0.94); }
+
+/* 分段控件（类型切换） */
+.seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--c-fill);
+  border-radius: var(--r-button);
+}
+.seg-item {
+  flex: 1 1 0;
+  height: 26px;
+  font-family: inherit;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  color: var(--c-text-2);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: default;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.seg-item:hover { color: var(--c-text); }
+.seg-item.active {
+  color: var(--c-text);
+  background: var(--c-bg-panel);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 /* ---------------- Toast ---------------- */

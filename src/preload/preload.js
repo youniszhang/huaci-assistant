@@ -51,6 +51,9 @@ const bridge = {
   checkDswebStatus: () => ipcRenderer.invoke(API["config:dsweb-status"]),
   onDswebStatus: (cb) => subscribe(API["config:dsweb-status"], cb),
   addDswebProvider: () => ipcRenderer.invoke(API["config:add-dsweb-provider"]),
+  addProvider: (payload) => ipcRenderer.invoke(API["config:add-provider"], payload),
+  updateProvider: (payload) => ipcRenderer.invoke(API["config:update-provider"], payload),
+  deleteProvider: (payload) => ipcRenderer.invoke(API["config:delete-provider"], payload),
 
   // ---- 生成历史 ----
   listHistory: (payload) => ipcRenderer.invoke(API["history:list"], payload),

@@ -157,33 +157,43 @@ export function isProviderUsable(p: ProviderConfig): { ok: boolean; reason?: str
 
 /** DeepSeek 网页版默认模型名（与插件「添加供应商」时写入的一致） */
 const DSWEB_DEFAULT_MODELS = ["DeepSeek-V4-Pro（专家模式）", "DeepSeek-V4-Flash（快速模式）"];
+/** 网页版默认地址与端口（与插件一致） */
+const DSWEB_BASE_URL = "https://chat.deepseek.com";
+const DSWEB_DEFAULT_PORT = 9223;
 
-export interface AddProviderResult {
+export interface ProviderWriteResult {
 	ok: boolean;
-	/** 新建的供应商 id（已存在时为现有条目 id） */
+	/** 新建/更新的供应商 id */
 	id?: string;
-	/** 是否本次新建（false = 已存在，未改动配置） */
+	/** 是否本次新建（false = 已存在 / 仅更新） */
 	created?: boolean;
 	message?: string;
 }
 
+/** 生成供应商 id（与插件 genId 同风格，避免两边混用时分不清） */
+function genProviderId(): string {
+	return "p" + Math.random().toString(36).slice(2, 9);
+}
+
+/** baseURL 规范化（对齐插件 normalizeBaseURL：补 https、去尾部斜杠） */
+export function normalizeProviderURL(url: string): string {
+	let u = String(url || "").trim();
+	if (u && !/^https?:\/\//i.test(u)) u = `https://${u}`;
+	return u.replace(/\/+$/, "");
+}
+
 /**
- * 确保插件配置里存在一个 DeepSeek 网页版供应商条目。
- *
- * 为什么需要它：供应商列表完全来自插件的 data.json，插件本身没有任何预置
- * 条目（addProvider 只由用户手动触发）。所以新机器上用户点「登录网页版」
- * 登录成功后，配置里若没有 ptype=dsweb 的条目，列表里就没有它可选 ——
- * 登录态有效却无处可用。此函数补齐这个条目，让「登录即可用」成立。
+ * 读取 → 修改 → 原子写回插件配置（所有供应商增删改共用）。
  *
  * 安全约束（写的是用户的 Obsidian 配置文件，必须保守）：
- *  - 已有 dsweb 条目 → 不动配置，只返回其 id
- *  - 写入前备份 data.json.bak，写入用「临时文件 + rename」保证原子性
- *  - 只增不改：不触碰其它供应商与插件的其它设置
+ *  - 写入前备份 data.json.bak；写入用「临时文件 + rename」保证原子性
+ *  - 只改 providers（及相关 active 字段），其余设置原样保留
+ *  - 配置不存在/损坏时拒绝，绝不覆盖
  */
-export function ensureDswebProvider(
+function mutateExplainerSettings(
 	vaultPath: string,
-	opts: { port?: number; activate?: boolean } = {}
-): AddProviderResult {
+	mutate: (raw: Record<string, unknown>, providers: ProviderConfig[]) => ProviderWriteResult
+): ProviderWriteResult {
 	const file = explainerDataPath(vaultPath);
 	if (!fs.existsSync(file)) {
 		return { ok: false, message: `未找到插件配置：${file}` };
@@ -195,47 +205,218 @@ export function ensureDswebProvider(
 		return { ok: false, message: `插件配置解析失败：${(err as Error).message}` };
 	}
 	if (!Array.isArray(raw.providers)) raw.providers = [];
+	const providers = raw.providers as ProviderConfig[];
 
-	// 已有 dsweb 条目 → 只读返回，不改配置
-	const existing = (raw.providers as ProviderConfig[]).find((p) => p?.ptype === "dsweb");
-	if (existing?.id) {
-		return { ok: true, id: existing.id, created: false };
+	let result: ProviderWriteResult;
+	try {
+		result = mutate(raw, providers);
+	} catch (err) {
+		return { ok: false, message: (err as Error).message };
 	}
-
-	const prov: ProviderConfig = {
-		id: `dsweb${Date.now().toString(36)}`,
-		name: "DeepSeek 网页版",
-		baseURL: "https://chat.deepseek.com",
-		apiKey: "",
-		models: [...DSWEB_DEFAULT_MODELS],
-		enabled: true,
-		ptype: "dsweb",
-		vision: true,
-		dswebPort: opts.port ?? 9223,
-		expertMode: true,
-	};
-	(raw.providers as ProviderConfig[]).push(prov);
-	// 切为使用中：登录的目的就是用它，不自动激活会让人以为「还是不能用」
-	if (opts.activate !== false) {
-		raw.activeProviderId = prov.id;
-		raw.activeModel = prov.models[0];
-	}
+	if (!result.ok) return result;
 
 	try {
-		// 备份（覆盖上一次备份即可，避免堆积）
 		try {
 			fs.copyFileSync(file, `${file}.bak`);
 		} catch {
-			// 备份失败不阻断写入，但要留痕
 			console.error("[obsidian] 备份 data.json 失败，继续写入");
 		}
-		// 原子写：临时文件 + rename，避免写一半损坏用户配置
 		const tmp = `${file}.tmp-${process.pid}`;
 		fs.writeFileSync(tmp, JSON.stringify(raw, null, 2), "utf8");
 		fs.renameSync(tmp, file);
-		console.log(`[obsidian] 已补建 DeepSeek 网页版供应商（id=${prov.id}）→ ${file}`);
-		return { ok: true, id: prov.id, created: true };
+		return result;
 	} catch (err) {
 		return { ok: false, message: `写入插件配置失败：${(err as Error).message}` };
 	}
+}
+
+export interface NewProviderInput {
+	name?: string;
+	/** api 类型必填；dsweb 可留空（用默认地址） */
+	baseURL?: string;
+	apiKey?: string;
+	/** 模型名（数组或逗号/换行分隔的字符串） */
+	models?: string[] | string;
+	ptype?: "api" | "dsweb";
+	/** 新建后是否切为使用中（默认 true） */
+	activate?: boolean;
+	/** dsweb 专属 */
+	dswebPort?: number;
+	expertMode?: boolean;
+	webSearch?: boolean;
+	vision?: boolean;
+}
+
+/** 把模型输入规整为数组（支持数组 / 逗号 / 换行分隔） */
+export function parseModels(input: string[] | string | undefined): string[] {
+	if (Array.isArray(input)) return input.map((m) => String(m).trim()).filter(Boolean);
+	return String(input ?? "")
+		.split(/[\n,，;；]/)
+		.map((m) => m.trim())
+		.filter(Boolean);
+}
+
+/**
+ * 新增供应商（API 中转站 / DeepSeek 网页版都走这里）。
+ * 校验对齐插件：api 类型必须有 baseURL 与至少一个模型；dsweb 无需 Key。
+ */
+export function addProvider(vaultPath: string, input: NewProviderInput): ProviderWriteResult {
+	const ptype = input.ptype === "dsweb" ? "dsweb" : "api";
+	const models = parseModels(input.models);
+	const name = String(input.name || "").trim();
+
+	if (ptype === "api") {
+		if (!String(input.baseURL || "").trim()) return { ok: false, message: "请填写 Base URL（中转站地址）" };
+		if (!models.length) return { ok: false, message: "请至少填写一个模型名" };
+	}
+	if (ptype === "dsweb" && !models.length) {
+		// 网页版用默认模型名，用户没填也能用
+		models.push(...DSWEB_DEFAULT_MODELS);
+	}
+
+	const prov: ProviderConfig = {
+		id: genProviderId(),
+		name: name || (ptype === "dsweb" ? "DeepSeek 网页版" : "新供应商"),
+		baseURL: ptype === "dsweb" ? normalizeProviderURL(input.baseURL || DSWEB_BASE_URL) : normalizeProviderURL(input.baseURL || ""),
+		apiKey: String(input.apiKey || "").trim(),
+		models,
+		enabled: true,
+		ptype,
+	};
+	if (ptype === "dsweb") {
+		prov.vision = input.vision !== false;
+		prov.dswebPort = Number(input.dswebPort) || DSWEB_DEFAULT_PORT;
+		prov.expertMode = input.expertMode !== false;
+		prov.webSearch = !!input.webSearch;
+	} else if (input.vision) {
+		prov.vision = true;
+	}
+
+	return mutateExplainerSettings(vaultPath, (raw, providers) => {
+		providers.push(prov);
+		if (input.activate !== false) {
+			raw.activeProviderId = prov.id;
+			raw.activeModel = prov.models[0];
+		}
+		console.log(`[obsidian] 已新增供应商 ${prov.name}（${prov.ptype}，id=${prov.id}）`);
+		return { ok: true, id: prov.id, created: true };
+	});
+}
+
+export interface ProviderPatch {
+	name?: string;
+	baseURL?: string;
+	apiKey?: string;
+	models?: string[] | string;
+	enabled?: boolean;
+	ptype?: "api" | "dsweb";
+	dswebPort?: number;
+	expertMode?: boolean;
+	webSearch?: boolean;
+	vision?: boolean;
+}
+
+/** 更新供应商（只改传入的字段） */
+export function updateProvider(vaultPath: string, id: string, patch: ProviderPatch): ProviderWriteResult {
+	if (!id) return { ok: false, message: "缺少供应商 id" };
+	return mutateExplainerSettings(vaultPath, (raw, providers) => {
+		const idx = providers.findIndex((p) => p?.id === id);
+		if (idx === -1) return { ok: false, message: "供应商不存在（可能已被删除）" };
+		const cur = providers[idx];
+		const next: ProviderConfig = { ...cur };
+		if (patch.name !== undefined) next.name = String(patch.name).trim() || cur.name;
+		if (patch.baseURL !== undefined) next.baseURL = normalizeProviderURL(patch.baseURL);
+		if (patch.apiKey !== undefined) next.apiKey = String(patch.apiKey).trim();
+		if (patch.models !== undefined) next.models = parseModels(patch.models);
+		if (patch.enabled !== undefined) next.enabled = !!patch.enabled;
+		if (patch.ptype !== undefined) next.ptype = patch.ptype === "dsweb" ? "dsweb" : "api";
+		if (patch.dswebPort !== undefined) next.dswebPort = Number(patch.dswebPort) || DSWEB_DEFAULT_PORT;
+		if (patch.expertMode !== undefined) next.expertMode = !!patch.expertMode;
+		if (patch.webSearch !== undefined) next.webSearch = !!patch.webSearch;
+		if (patch.vision !== undefined) next.vision = !!patch.vision;
+		// api 类型的基本校验（避免把必填项清空导致不可用）
+		if (next.ptype === "api") {
+			if (!next.baseURL?.trim()) return { ok: false, message: "Base URL 不能为空" };
+			if (!next.models?.length) return { ok: false, message: "至少保留一个模型名" };
+		}
+		providers[idx] = next;
+		// 当前使用中的条目被改名/换模型 → 同步 activeModel，避免指向已不存在的模型
+		if (raw.activeProviderId === id) {
+			const activeModel = String(raw.activeModel ?? "");
+			if (next.models?.length && !next.models.includes(activeModel)) {
+				raw.activeModel = next.models[0];
+			}
+		}
+		console.log(`[obsidian] 已更新供应商 ${next.name}（id=${id}）`);
+		return { ok: true, id, created: false };
+	});
+}
+
+/**
+ * 删除供应商。
+ * 若删的是当前使用中的条目 → 自动切到剩下的第一个启用项（对齐插件 deleteProvider），
+ * 否则会留下指向不存在 id 的 activeProviderId，表现为「生成时找不到供应商」。
+ */
+export function deleteProvider(vaultPath: string, id: string): ProviderWriteResult {
+	if (!id) return { ok: false, message: "缺少供应商 id" };
+	return mutateExplainerSettings(vaultPath, (raw, providers) => {
+		const idx = providers.findIndex((p) => p?.id === id);
+		if (idx === -1) return { ok: false, message: "供应商不存在（可能已被删除）" };
+		const [removed] = providers.splice(idx, 1);
+		if (raw.activeProviderId === id) {
+			const next = providers.find((p) => p?.enabled) ?? providers[0];
+			raw.activeProviderId = next?.id ?? "";
+			raw.activeModel = next?.models?.[0] ?? "";
+		}
+		console.log(`[obsidian] 已删除供应商 ${removed?.name ?? id}（id=${id}）`);
+		return { ok: true, id, created: false };
+	});
+}
+
+/**
+ * 确保插件配置里存在一个 DeepSeek 网页版供应商条目。
+ *
+ * 为什么需要它：供应商列表完全来自插件的 data.json，插件本身没有任何预置
+ * 条目（addProvider 只由用户手动触发）。所以新机器上用户点「登录网页版」
+ * 登录成功后，配置里若没有 ptype=dsweb 的条目，列表里就没有它可选 ——
+ * 登录态有效却无处可用。此函数补齐这个条目，让「登录即可用」成立。
+ *
+ * 幂等：已有 dsweb 条目（含被禁用的）时只读返回，不改配置。
+ */
+export function ensureDswebProvider(
+	vaultPath: string,
+	opts: { port?: number; activate?: boolean } = {}
+): ProviderWriteResult {
+	return mutateExplainerSettings(vaultPath, (raw, providers) => {
+		const existing = providers.find((p) => p?.ptype === "dsweb");
+		if (existing?.id) {
+			// 已存在 → 不动配置；但若要求激活则切过去（登录后即用）
+			if (opts.activate !== false && raw.activeProviderId !== existing.id) {
+				raw.activeProviderId = existing.id;
+				raw.activeModel = existing.models?.[0] ?? DSWEB_DEFAULT_MODELS[0];
+				console.log(`[obsidian] 已切换到既有网页版供应商（id=${existing.id}）`);
+				return { ok: true, id: existing.id, created: false };
+			}
+			return { ok: true, id: existing.id, created: false };
+		}
+		const prov: ProviderConfig = {
+			id: genProviderId(),
+			name: "DeepSeek 网页版",
+			baseURL: DSWEB_BASE_URL,
+			apiKey: "",
+			models: [...DSWEB_DEFAULT_MODELS],
+			enabled: true,
+			ptype: "dsweb",
+			vision: true,
+			dswebPort: opts.port ?? DSWEB_DEFAULT_PORT,
+			expertMode: true,
+		};
+		providers.push(prov);
+		if (opts.activate !== false) {
+			raw.activeProviderId = prov.id;
+			raw.activeModel = prov.models[0];
+		}
+		console.log(`[obsidian] 已补建 DeepSeek 网页版供应商（id=${prov.id}）`);
+		return { ok: true, id: prov.id, created: true };
+	});
 }

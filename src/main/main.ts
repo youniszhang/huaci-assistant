@@ -14,7 +14,18 @@ import * as fs from "fs";
 import * as path from "path";
 import { SelectionCapture, SelectionEvent, ClickEvent, helperPath, ScreenRect, OcrResult } from "./capture";
 import { OverlayWindow, OverlayPosition, RegionOverlay } from "./overlay";
-import { listVaults, loadProviders, pickVault, ProviderBundle, ensureDswebProvider } from "./obsidian";
+import {
+	listVaults,
+	loadProviders,
+	pickVault,
+	ProviderBundle,
+	ensureDswebProvider,
+	addProvider,
+	updateProvider,
+	deleteProvider,
+	NewProviderInput,
+	ProviderPatch,
+} from "./obsidian";
 import { AppSettings, fillTemplate, loadSettings, saveSettings } from "./settings";
 import { listCaptures, readCapture, writeCapture, sanitizeBody, annotationTitle } from "./note";
 import { runLlm, SYSTEM_PROMPT, ChatMessage, ensureBrowser, killBrowser, connectDeepSeek, checkLogin, openLoginPage, probeLoginStatus } from "./llm";
@@ -1064,6 +1075,44 @@ function registerIpc(): void {
 					? "已添加「DeepSeek 网页版」供应商并切为使用中"
 					: "已存在「DeepSeek 网页版」供应商，已切为使用中",
 			};
+		}
+		return res;
+	});
+
+	// 供应商增删改（写回插件 data.json，供桌面端直接管理，无需回 Obsidian 操作）
+	ipcMain.handle(ch("config:add-provider"), (_e, payload: NewProviderInput) => {
+		const v = pickVault(settings.vaultPath || undefined);
+		if (!v) return { ok: false, message: "未找到 Obsidian vault，请先在状态页选择笔记库" };
+		const res = addProvider(v.path, payload ?? {});
+		if (res.ok) {
+			rebuildTrayMenu();
+			console.log(`[config:add-provider] 已新增供应商 id=${res.id}`);
+		}
+		return res;
+	});
+
+	ipcMain.handle(ch("config:update-provider"), (_e, payload: { id: string } & ProviderPatch) => {
+		const v = pickVault(settings.vaultPath || undefined);
+		if (!v) return { ok: false, message: "未找到 Obsidian vault，请先在状态页选择笔记库" };
+		const { id, ...patch } = payload ?? { id: "" };
+		const res = updateProvider(v.path, String(id ?? ""), patch);
+		if (res.ok) rebuildTrayMenu();
+		return res;
+	});
+
+	ipcMain.handle(ch("config:delete-provider"), (_e, payload: { id: string }) => {
+		const v = pickVault(settings.vaultPath || undefined);
+		if (!v) return { ok: false, message: "未找到 Obsidian vault，请先在状态页选择笔记库" };
+		const id = String(payload?.id ?? "");
+		// 删的是当前指定的优先供应商 → 清掉这个偏好，否则会指向不存在的 id
+		if (settings.preferredProviderId === id) {
+			settings.preferredProviderId = "";
+			saveSettings(settings);
+		}
+		const res = deleteProvider(v.path, id);
+		if (res.ok) {
+			rebuildTrayMenu();
+			console.log(`[config:delete-provider] 已删除供应商 id=${id}`);
 		}
 		return res;
 	});

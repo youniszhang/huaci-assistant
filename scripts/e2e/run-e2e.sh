@@ -8,6 +8,8 @@
 #   bash scripts/e2e/run-e2e.sh v011               # 只跑 v0.1.1（拖动/历史/autoPopup）
 #   bash scripts/e2e/run-e2e.sh dsweb-login        # 只跑网页版登录链路（真机，隔离 profile）
 #   bash scripts/e2e/run-e2e.sh dsweb-provider     # 只跑供应商条目补建（纯文件）
+#   bash scripts/e2e/run-e2e.sh provider-crud      # 只跑供应商增删改（纯文件）
+#   （provider-ui 需要手动准备临时 vault，见脚本头部说明）
 #
 # 关键点：
 #  - helper 字节级备份/还原 → CDHash 不变 → TCC 权限无损
@@ -34,6 +36,11 @@ fi
 if [ "${CASES[*]}" = "dsweb-provider" ]; then
   echo "======== 用例: dsweb-provider（供应商条目补建，纯文件） ========"
   node "$ROOT/scripts/e2e/e2e-dsweb-provider.js"
+  exit $?
+fi
+if [ "${CASES[*]}" = "provider-crud" ]; then
+  echo "======== 用例: provider-crud（供应商增删改，纯文件） ========"
+  node "$ROOT/scripts/e2e/e2e-provider-crud.js"
   exit $?
 fi
 

@@ -236,6 +236,8 @@
               ? '<button class="btn quiet" disabled>使用中</button>'
               : `<button class="btn" data-use="${p.id}">使用</button>`
           }
+          <button class="btn quiet" data-edit="${p.id}">编辑</button>
+          <button class="btn quiet danger" data-del="${p.id}" title="删除该供应商">删除</button>
         </div>
       </div>`;
       })
@@ -297,7 +299,194 @@
       testBtn.disabled = false;
       testBtn.textContent = "测试";
       toast(res.ok ? res.message : "失败：" + res.message, 5000);
+      return;
     }
+    const editBtn = e.target.closest("[data-edit]");
+    if (editBtn) {
+      openProviderModal(editBtn.dataset.edit);
+      return;
+    }
+    const delBtn = e.target.closest("[data-del]");
+    if (delBtn) {
+      const id = delBtn.dataset.del;
+      const p = providers.find((x) => x.id === id);
+      const isActive = id === activeId;
+      const msg = isActive
+        ? `删除「${p ? p.name : id}」？它是当前使用中的供应商，删除后会自动切换到其它可用项。\n\n（配置来源是 Obsidian 插件的 data.json，会同步生效）`
+        : `删除「${p ? p.name : id}」？\n\n（配置来源是 Obsidian 插件的 data.json，会同步生效）`;
+      if (!confirm(msg)) return;
+      delBtn.disabled = true;
+      const res = await api.deleteProvider({ id });
+      if (res.ok) {
+        toast("已删除供应商");
+        await loadProviders();
+        await loadStatus();
+      } else {
+        delBtn.disabled = false;
+        toast(res.message || "删除失败", 5000);
+      }
+    }
+  });
+
+  // ------------------------------------------------ 供应商弹窗（新增/编辑）
+
+  /** 弹窗状态：editingId 为空 = 新增 */
+  let pmEditingId = "";
+  let pmPtype = "api";
+
+  const PM = {
+    modal: $("providerModal"),
+    title: $("pmTitle"),
+    type: $("pmType"),
+    typeNote: $("pmTypeNote"),
+    name: $("pmName"),
+    url: $("pmURL"),
+    key: $("pmKey"),
+    models: $("pmModels"),
+    urlField: $("pmUrlField"),
+    keyField: $("pmKeyField"),
+    modelsField: $("pmModelsField"),
+    portField: $("pmPortField"),
+    port: $("pmPort"),
+    dswebOpts: $("pmDswebOpts"),
+    expert: $("pmExpert"),
+    webSearch: $("pmWebSearch"),
+    activate: $("pmActivate"),
+    activateRow: $("pmActivateRow"),
+    msg: $("pmMsg"),
+  };
+
+  function pmSetType(ptype) {
+    pmPtype = ptype === "dsweb" ? "dsweb" : "api";
+    PM.type.querySelectorAll(".seg-item").forEach((b) => {
+      b.classList.toggle("active", b.dataset.ptype === pmPtype);
+    });
+    const isDsweb = pmPtype === "dsweb";
+    // API：地址 + Key + 模型必填；网页版：地址与模型可留空（用默认值），端口/开关可见
+    PM.urlField.classList.toggle("hidden", isDsweb);
+    PM.keyField.classList.toggle("hidden", isDsweb);
+    PM.portField.classList.toggle("hidden", !isDsweb);
+    PM.dswebOpts.classList.toggle("hidden", !isDsweb);
+    PM.modelsField.classList.remove("hidden");
+    PM.typeNote.textContent = isDsweb
+      ? "免 API Key：复用专用浏览器里的 DeepSeek 网页登录态（登录态与 Obsidian 插件共用）"
+      : "OpenAI 兼容接口：填中转站地址 + Key + 模型名";
+    if (isDsweb) {
+      PM.name.placeholder = "DeepSeek 网页版";
+      PM.models.placeholder = "留空则用默认：DeepSeek-V4-Pro（专家模式）等";
+    } else {
+      PM.name.placeholder = "例如：aitry / 智谱 / 自建中转";
+      PM.models.placeholder = "deepseek-v4-flash\n每行一个，也可用逗号分隔";
+    }
+    // 编辑已有条目时不允许改类型（避免把 API 改成网页版后 Key/模型错乱）
+    PM.type.querySelectorAll(".seg-item").forEach((b) => {
+      b.disabled = !!pmEditingId;
+    });
+  }
+
+  PM.type.addEventListener("click", (e) => {
+    const btn = e.target.closest(".seg-item");
+    if (!btn || btn.disabled) return;
+    pmSetType(btn.dataset.ptype);
+  });
+
+  function openProviderModal(editId) {
+    pmEditingId = editId || "";
+    const p = pmEditingId ? providers.find((x) => x.id === pmEditingId) : null;
+    PM.msg.textContent = "";
+    PM.title.textContent = pmEditingId ? "编辑供应商" : "新增供应商";
+    if (p) {
+      pmSetType(p.ptype === "dsweb" ? "dsweb" : "api");
+      PM.name.value = p.name || "";
+      PM.url.value = p.baseURL || "";
+      PM.key.value = p.apiKey || "";
+      PM.models.value = (p.models || []).join("\n");
+      PM.port.value = String(p.dswebPort || 9223);
+      PM.expert.checked = p.expertMode !== false;
+      PM.webSearch.checked = !!p.webSearch;
+      PM.activate.checked = false;
+      PM.activateRow.classList.add("hidden"); // 编辑时不涉及「立即使用」
+    } else {
+      pmSetType("api");
+      PM.name.value = "";
+      PM.url.value = "";
+      PM.key.value = "";
+      PM.models.value = "";
+      PM.port.value = "9223";
+      PM.expert.checked = true;
+      PM.webSearch.checked = false;
+      PM.activate.checked = true;
+      PM.activateRow.classList.remove("hidden");
+    }
+    PM.modal.classList.remove("hidden");
+    // 焦点给第一个输入框，便于直接输入
+    setTimeout(() => (pmEditingId ? PM.name : PM.name).focus(), 30);
+  }
+
+  function closeProviderModal() {
+    PM.modal.classList.add("hidden");
+    pmEditingId = "";
+  }
+
+  $("btnAddProvider").addEventListener("click", () => openProviderModal(""));
+  $("pmClose").addEventListener("click", closeProviderModal);
+  $("pmCancel").addEventListener("click", closeProviderModal);
+  PM.modal.addEventListener("click", (e) => {
+    if (e.target === PM.modal) closeProviderModal(); // 点遮罩关闭
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !PM.modal.classList.contains("hidden")) closeProviderModal();
+  });
+
+  $("pmSave").addEventListener("click", async () => {
+    const name = PM.name.value.trim();
+    const isDsweb = pmPtype === "dsweb";
+    const models = PM.models.value
+      .split(/[\n,，;；]/)
+      .map((m) => m.trim())
+      .filter(Boolean);
+
+    // 前端先做一次校验，给出即时反馈（主进程还会再校验一次）
+    if (!isDsweb) {
+      if (!PM.url.value.trim()) return (PM.msg.textContent = "请填写 Base URL");
+      if (!models.length) return (PM.msg.textContent = "请至少填写一个模型名");
+    }
+    PM.msg.textContent = "";
+    const btn = $("pmSave");
+    btn.disabled = true;
+    btn.textContent = "保存中…";
+
+    const payload = isDsweb
+      ? {
+          name: name || "DeepSeek 网页版",
+          ptype: "dsweb",
+          dswebPort: Number(PM.port.value) || 9223,
+          expertMode: PM.expert.checked,
+          webSearch: PM.webSearch.checked,
+          models,
+        }
+      : {
+          name,
+          ptype: "api",
+          baseURL: PM.url.value.trim(),
+          apiKey: PM.key.value.trim(),
+          models,
+        };
+
+    const res = pmEditingId
+      ? await api.updateProvider(Object.assign({ id: pmEditingId }, payload))
+      : await api.addProvider(Object.assign(payload, { activate: PM.activate.checked }));
+
+    btn.disabled = false;
+    btn.textContent = "保存";
+    if (!res.ok) {
+      PM.msg.textContent = res.message || "保存失败";
+      return;
+    }
+    toast(pmEditingId ? "已更新供应商" : "已新增供应商" + (isDsweb ? "，请点「登录网页版」完成登录" : ""), 5000);
+    closeProviderModal();
+    await loadProviders();
+    await loadStatus();
   });
 
   $("btnFollowPlugin").addEventListener("click", async () => {

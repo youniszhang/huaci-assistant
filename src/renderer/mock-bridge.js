@@ -138,6 +138,31 @@
     checkDswebStatus: async () => ({ state: "logged-in", ok: true }),
     onDswebStatus: () => () => {},
     addDswebProvider: async () => ({ ok: true, created: true, message: "已添加「DeepSeek 网页版」供应商（mock）" }),
+    addProvider: async (p) => {
+      const prov = {
+        id: "mock-" + Date.now().toString(36),
+        name: (p && p.name) || "新供应商",
+        baseURL: (p && p.baseURL) || "https://example.com/v1",
+        apiKey: (p && p.apiKey) || "",
+        models: (p && p.models) || ["demo-model"],
+        enabled: true,
+        ptype: (p && p.ptype) || "api",
+      };
+      mockProviders.push(prov);
+      return { ok: true, id: prov.id, created: true };
+    },
+    updateProvider: async (p) => {
+      const hit = mockProviders.find((x) => x.id === (p && p.id));
+      if (!hit) return { ok: false, message: "供应商不存在（mock）" };
+      Object.assign(hit, p);
+      return { ok: true, id: hit.id, created: false };
+    },
+    deleteProvider: async (p) => {
+      const i = mockProviders.findIndex((x) => x.id === (p && p.id));
+      if (i === -1) return { ok: false, message: "供应商不存在（mock）" };
+      mockProviders.splice(i, 1);
+      return { ok: true, id: p.id, created: false };
+    },
 
     listHistory: async () => ({
       records: [
