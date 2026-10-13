@@ -475,10 +475,20 @@ bash scripts/e2e/run-e2e.sh provider-independence  # 供应商配置独立（含
 
 ---
 
-## 支持这个项目
+## 请作者喝杯咖啡
 
-如果它帮到了你，可以[请作者喝杯咖啡](https://github.com/youniszhang/huaci-assistant#支持这个项目) ☕️
-（App 内「关于」页也有收款码）
+这个工具**完全免费、开源、无广告、无账号**，作者用业余时间维护它 ——
+每一条 issue、每一次更新，背后都是晚上和周末。
+
+如果它每天帮你省下几分钟，**一杯咖啡的鼓励**就能让这个项目走得更远 ☕️
+
+<p align="center">
+  <img src="src/renderer/assets/donate-wechat.jpg" alt="微信收款码" width="240" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="src/renderer/assets/donate-alipay.jpg" alt="支付宝收款码" width="240" />
+</p>
+
+<p align="center"><sub>微信 / 支付宝扫码支持 · 金额随意 · 你的支持会变成下一个功能</sub></p>
 
 ## 致谢
 
