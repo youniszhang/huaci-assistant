@@ -2,7 +2,7 @@
   "name": "huaci-assistant",
   "productName": "划词助手",
   "version": "0.2.2",
-  "description": "系统级划词解释助手：任意应用划词 → AI 流式解释 → 一键录入 Obsidian 笔记（API/key 与 obsidian-ai-explainer 插件共用）",
+  "description": "系统级划词解释助手：任意应用划词 → AI 流式解释 → 一键录入 Obsidian（macOS / Windows）",
   "main": "dist/main/main.js",
   "author": "youniszhang",
   "license": "MIT",
@@ -15,7 +15,9 @@
     "test:dsweb": "node scripts/test-dsweb.js",
     "test:note": "node scripts/test-note.js",
     "pack": "bash scripts/build-macos.sh",
-    "pack:dmg": "bash scripts/build-macos.sh"
+    "pack:dmg": "bash scripts/build-macos.sh",
+    "pack:win": "bash scripts/build-windows.sh",
+    "helper:win": "bash scripts/build-helper-win.sh"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
@@ -41,6 +43,10 @@
       {
         "from": "bin/SelectionHelper",
         "to": "bin/SelectionHelper"
+      },
+      {
+        "from": "bin/SelectionHelper.exe",
+        "to": "bin/SelectionHelper.exe"
       }
     ],
     "mac": {
@@ -66,6 +72,26 @@
         "width": 560,
         "height": 400
       }
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "HuaCiAssistant-${version}-${arch}.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "划词助手",
+      "artifactName": "HuaCiAssistant-Setup-${version}.exe"
     }
   }
 }

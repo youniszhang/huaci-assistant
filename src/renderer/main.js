@@ -176,6 +176,11 @@
     }
   });
 
+  // 关于页：项目主页
+  $("aboutGithub").addEventListener("click", () => {
+    api.openExternal("https://github.com/youniszhang/huaci-assistant");
+  });
+
   $("btnOpenDir").addEventListener("click", () => {
     if (!vaultPath) return toast("未设置 vault");
     const dir = (settings && settings.captureDir) || "04-日常记录/AI划词解释";

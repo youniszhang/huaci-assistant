@@ -975,3 +975,59 @@ html, body {
 }
 
 .hidden { display: none !important; }
+
+/* ---------------- 关于页：赞助收款码 ---------------- */
+
+/* 赞助引导：强调「免费开源 + 一杯咖啡」的轻量感，不硬推 */
+.donate-callout {
+  margin-top: var(--sp-2);
+  padding: var(--sp-4);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--c-accent) 7%, var(--c-bg-sunken)) 0%,
+    var(--c-bg-sunken) 70%);
+  border: 1px solid color-mix(in srgb, var(--c-accent) 22%, var(--c-separator));
+  border-radius: var(--r-popover);
+}
+.donate-lead {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-small);
+  line-height: var(--lh-loose);
+  color: var(--c-text-2);
+}
+.donate-lead:last-of-type { margin-bottom: var(--sp-2); }
+.donate-lead strong { color: var(--c-text); font-weight: var(--fw-semibold); }
+.donate-note {
+  margin: 0;
+  font-size: var(--fs-caption);
+  color: var(--c-text-3);
+}
+
+.donate {
+  display: flex;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  margin-top: var(--sp-3);
+}
+.donate-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: var(--sp-3);
+  background: var(--c-bg-sunken);
+  border: 1px solid var(--c-separator);
+  border-radius: var(--r-popover);
+}
+.donate-item img {
+  display: block;
+  width: 150px;
+  height: auto;
+  border-radius: var(--r-button);
+  background: #fff;
+}
+.donate-item figcaption {
+  font-size: var(--fs-caption);
+  color: var(--c-text-2);
+  font-weight: var(--fw-medium);
+}

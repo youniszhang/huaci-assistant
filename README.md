@@ -1,10 +1,15 @@
-# 划词助手（macOS 桌面版）
+# 划词助手（HuaCi Assistant）
 
-> 系统级「豆包式」划词助手：在**任何应用**里选中文字 → 浮出工具条 → AI 流式解释 → 一键录入 Obsidian 笔记。
-> **API / Key 与你的 Obsidian `ai-explainer` 插件完全共用**，无需重复配置。
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](#安装)
+[![Release](https://img.shields.io/github/v/release/youniszhang/huaci-assistant)](https://github.com/youniszhang/huaci-assistant/releases)
+
+> 系统级「豆包式」划词助手：在**任何应用**里选中文字 → 按快捷键唤起工具条 → AI 流式解释 → 一键录入 Obsidian 笔记。
+>
+> **开源免费**（MIT）· macOS 与 Windows 双平台 · 供应商配置本机独立，也支持免 Key 的 DeepSeek 网页版
 
 ```
-选中文字 ──▶ 浮动工具条 ✨解释 🌐翻译 📝总结 ──▶ 结果卡片（流式/追问） ──▶ 📥 录入笔记
+选中文字 ──▶ ⌘5/Ctrl+5 唤起工具条 ✨解释 🌐翻译 📝总结 ──▶ 结果卡片（流式/追问） ──▶ 📥 录入笔记
 ```
 
 ### 效果截图
@@ -62,7 +67,9 @@
 - **追问**：结果卡片底部可直接追问，多轮对话保持上下文
 - **一键录入笔记**：写入 `<vault>/04-日常记录/AI划词解释/YYYY-MM-DD.md`，格式与插件 callout 一致；同一段文字重复解释会**覆盖同条目**而不是堆重复
 - **生成记录**：每次生成（含追问与失败）的输入输出都落盘本机（`userData/history/`），主窗口「生成记录」页可回看完整正文、删除或清空；已录入笔记的条目带「已录入」标记
-- **多供应商**：三方 OpenAI 兼容 API（aitry / 智谱 / DeepSeek 官方…）+ DeepSeek 网页版（免 Key，复用插件已登录的专用浏览器）
+- **多供应商**：三方 OpenAI 兼容 API（aitry / 智谱 / DeepSeek 官方…）+ DeepSeek 网页版（**免 API Key**，用独立浏览器登录态）
+- **跨平台**：macOS（Swift 原生层）与 Windows（C#/.NET 原生层）功能对等 —— 划词捕获、框选 OCR、悬浮工具条全都有
+- **右键复制**：卡片里选中文字右键即可复制（复制 / 复制全部 / 全选）
 - **托盘常驻，不打扰**：启动不弹主窗口，后台通过菜单栏图标操作（开/关划词监听、立即取词、框选分析、打开收集目录、打开主窗口）；仅「辅助功能」未授权时静默弹一次引导页
 
 ### 为什么需要「框选分析」
@@ -80,24 +87,45 @@ OCR 在本地完成，**截图不上传**，只有识别出的文字会发给你
 
 ## 安装
 
-### 方式一：DMG（推荐）
+### macOS
 
-1. 构建：`bash scripts/build-macos.sh` → 产物 `dist/HuaCiAssistant-<版本>-arm64.dmg`
+1. 下载 `HuaCiAssistant-<版本>-arm64.dmg`（[Releases](https://github.com/youniszhang/huaci-assistant/releases)）
 2. 双击 DMG，把「划词助手」拖进「应用程序」
 3. **首次打开**若被 Gatekeeper 拦截：右键 .app → 打开，或到 `系统设置 › 隐私与安全性` 点「仍要打开」
 4. 首次运行按引导授予 **辅助功能** 与 **输入监控**；需要框选分析再额外授予 **屏幕录制**
 
-### 方式二：源码运行
+从源码构建：
 
 ```bash
 npm install --registry=https://registry.npmmirror.com --electron-mirror=https://npmmirror.com/mirrors/electron/
-bash scripts/build-macos.sh --no-dmg   # 编译 Swift helper + esbuild
-npm start                              # 启动
+bash scripts/build-macos.sh            # 编译 Swift helper + esbuild + 打包 DMG
+bash scripts/build-macos.sh --no-dmg   # 只构建，不打 DMG
+npm start                              # 开发运行
 ```
+
+### Windows
+
+1. 下载 `HuaCiAssistant-Setup-<版本>.exe`（[Releases](https://github.com/youniszhang/huaci-assistant/releases)）
+2. 双击安装（可选安装目录，自动创建桌面/开始菜单快捷方式）
+3. 首次运行无需额外授权（UIA 与鼠标钩子在 Windows 上开箱可用）
+
+从源码构建（需 [.NET 8 SDK](https://dotnet.microsoft.com/download)）：
+
+```bash
+npm install
+bash scripts/build-helper-win.sh       # 编译 C# helper → bin/SelectionHelper.exe
+bash scripts/build-windows.sh          # 完整构建 + 打包 NSIS 安装包
+bash scripts/build-windows.sh --no-pack  # 只构建
+```
+
+> 在 macOS 上也能交叉编译出 Windows exe（`dotnet publish -r win-x64`），
+> 但**无法在 macOS 上运行验证** —— Windows 功能验证请在 Windows 机器上进行。
 
 ---
 
 ## 权限说明
+
+### macOS
 
 | 权限 | 用途 | 不授予的后果 |
 |---|---|---|
@@ -111,6 +139,17 @@ npm start                              # 启动
 > 为什么 Electron 类应用必须靠「输入监控」：Chromium 系应用不通过系统 AX 接口暴露选区，
 > 只能在你完成划词动作后模拟一次 `Cmd+C` 把文字取出来（读完立即还原剪贴板）。
 > 识别"什么时候发生了划词"依赖全局鼠标事件监听，这正是「输入监控」权限提供的。
+
+### Windows
+
+**无需额外授权**。划词捕获基于 UI Automation + 低级鼠标/键盘钩子，普通桌面应用开箱可用。
+
+| 能力 | 实现 | 限制 |
+|---|---|---|
+| 读取选中文本 | UI Automation TextPattern | Chromium 系应用（Chrome/Obsidian/VS Code）需 Ctrl+C 兜底（读后还原剪贴板） |
+| 划词动作检测 | WH_MOUSE_LL / WH_KEYBOARD_LL 钩子 | 需要应用有普通用户权限（以管理员运行的应用可能收不到事件） |
+| 框选 OCR | Windows.Media.Ocr | 需要 Windows 10 2004（build 19041）以上；受保护内容（DRM）截不到 |
+| 终端类应用 | 不参与 Ctrl+C 兜底 | Windows Terminal / cmd / PowerShell 里划词不触发（Ctrl+C 是中断信号） |
 
 ---
 
@@ -237,12 +276,18 @@ created: 2026-10-07
 ## 架构
 
 ```
-┌─ Swift 划词助手 (bin/SelectionHelper，独立二进制 ~120KB) ────┐
-│  事件通道：全局鼠标/键盘监听（需输入监控权限）              │
-│  轮询通道：AX 读前台选区（只需辅助功能权限）                │
-│  → JSON-lines over stdio                                  │
+┌─ 原生划词助手（平台各自实现，协议完全一致）─────────────────┐
+│  macOS:   swift/SelectionHelper.swift  → bin/SelectionHelper│
+│           · 事件通道：CGEventTap 鼠标 + NSEvent 键盘        │
+│           · 轮询通道：Accessibility API 读选区              │
+│           · 框选 OCR：ScreenCaptureKit + Vision             │
+│  Windows: win/SelectionHelper/*.cs     → bin/SelectionHelper.exe
+│           · 事件通道：WH_MOUSE_LL / WH_KEYBOARD_LL 钩子     │
+│           · 轮询通道：UI Automation TextPattern 读选区      │
+│           · 框选 OCR：GDI 截屏 + Windows.Media.Ocr          │
+│  两者共用同一套 JSON-lines over stdio 协议                  │
 └────────────────────────┬──────────────────────────────────┘
-                         │ spawn + stdin/stdout
+                         │ spawn + stdin/stdout（主进程无需区分平台）
 ┌────────────────────────▼──────────────────────────────────┐
 │                  Electron 主进程 (TypeScript)             │
 │  capture.ts    进程管理 / 协议解析 / 崩溃重启              │
@@ -276,8 +321,17 @@ created: 2026-10-07
 │   │   └── llm/          cdp.ts / dsweb.ts / api.ts / index.ts / types.ts
 │   ├── preload/preload.js
 │   ├── renderer/         overlay.* / main.* / md.js / mock-bridge.js
+│   │   └── assets/       图标与赞助收款码
 │   └── shared/api.js     IPC 通道常量
-├── swift/SelectionHelper.swift + build.sh
+├── swift/                  macOS 原生层（Swift）
+│   ├── SelectionHelper.swift  划词捕获主程序（833 行）
+│   ├── ScreenOCR.swift        区域截屏 + Vision OCR
+│   └── build.sh               编译脚本
+├── win/                    Windows 原生层（C#/.NET 8）
+│   └── SelectionHelper/
+│       ├── Program.cs         划词捕获主程序（UIA + 钩子）
+│       ├── ScreenOcr.cs       区域截屏 + Windows.Media.Ocr
+│       └── SelectionHelper.csproj
 ├── scripts/
 │   ├── build-macos.sh    一键构建 + 打包 DMG
 │   ├── make-icons.sh     生成 icns 与托盘图标
@@ -317,23 +371,46 @@ created: 2026-10-07
 
 ## 已知限制
 
-- 仅 macOS（依赖 AppKit / Accessibility API）
-- Electron / Chromium 系应用（Obsidian、VS Code、Chrome）不通过 AX 暴露选区，这些应用里「拖拽选取」依赖 Cmd+C 兜底（读后自动还原剪贴板）；终端类应用不参与兜底
-- DeepSeek 网页版通道易受官网改版影响（与插件共担此风险）
-- 未做代码签名 / 公证，分发需手动绕过 Gatekeeper
+**通用**
+
+- Electron / Chromium 系应用（Obsidian、VS Code、Chrome）不通过系统无障碍接口暴露选区，
+  这些应用里「拖拽选取」依赖 Ctrl/Cmd+C 兜底（读后自动还原剪贴板）；终端类应用不参与兜底
+- DeepSeek 网页版通道易受官网改版影响（选择器可能失效，需要跟随更新）
+- 供应商配置存本机（`<userData>/providers.json`），换机器需重新配置
+
+**macOS**
+
+- 依赖 Accessibility API / CGEventTap / Vision；未做代码签名与公证，
+  分发需手动绕过 Gatekeeper（右键 .app → 打开）
+- 每次重新打包后主程序签名会变，需到「辅助功能」里重新授权
+
+**Windows**
+
+- 需要 Windows 10 2004（build 19041）以上 —— `Windows.Media.Ocr` 的最低要求
+- 以管理员权限运行的应用可能收不到低级钩子事件（Windows 的 UIPI 限制）
+- Windows OCR 不提供逐行置信度，因此「识别质量提示」功能在 Windows 上不可用
+- Windows 原生层（`win/`）尚未在真机做过完整验证 —— 欢迎试用后反馈
 
 ---
 
 ## 开发
 
 ```bash
-npm run dev                              # esbuild watch
-bash swift/build.sh                      # 只重编 Swift helper
+npm run dev                              # esbuild watch（改渲染层/主进程时用）
 npx tsc --noEmit --skipLibCheck          # 类型检查
+
+# 原生层（按平台）
+bash swift/build.sh                      # macOS：重编 Swift helper
+bash scripts/build-helper-win.sh         # Windows：重编 C# helper（需 .NET 8 SDK）
+
+# 单项测试
 node scripts/test-api.js                 # 直接测 API 通道
 node scripts/test-note.js                # 测笔记写入与覆盖
 node scripts/inspect-overlay.js          # 调试悬浮窗（需 --remote-debugging-port=9222 启动）
 ```
+
+> 原生层的协议是**两个平台共用的契约**：改协议要同步改 `swift/SelectionHelper.swift`
+> 与 `win/SelectionHelper/Program.cs`，并确认 `src/main/capture.ts` 的解析不变。
 
 ### E2E 回归
 
@@ -360,6 +437,54 @@ bash scripts/e2e/run-e2e.sh provider-independence  # 供应商配置独立（含
 > 验证「headless 实例存在时登录页仍能以可见窗口打开」与「登录轮询探测不导航」，
 > 跑完自动清理，不影响真实登录态。
 
+## 贡献
+
+欢迎 issue 与 PR！这个项目完全由业余时间维护，任何形式的帮助都有价值。
+
+### 报告问题
+
+提 issue 时请附上：
+
+- 系统版本（macOS 14.x / Windows 11 23H2…）与 App 版本（设置页「关于」可见）
+- **日志**：macOS 在 `~/Library/Application Support/划词助手/logs/main.log`；
+  Windows 在 `%APPDATA%\划词助手\logs\main.log`
+- 复现步骤与期望行为
+
+### 参与开发
+
+1. Fork → 建分支 → 改 → 提 PR
+2. 提交前请跑：
+   ```bash
+   npx tsc --noEmit --skipLibCheck
+   bash scripts/e2e/run-e2e.sh          # macOS：E2E 回归（136 项）
+   ```
+3. 改原生层时请说明验证方式（macOS 上无法验证 Windows helper 的实际行为）
+
+### 代码约定
+
+- 注释写「为什么」，不写「是什么」—— 尤其是踩过的坑（本项目多处注释记录了
+  实测结论，例如「为什么不能用 -webkit-app-region」「为什么悬浮窗要自绘右键菜单」）
+- 改行为要同步更新 README 与 E2E
+- 新增 E2E 用例放 `scripts/e2e/`，并在 `run-e2e.sh` 里注册
+
+### 适合上手的任务
+
+- 补充 Windows 端的 E2E（当前 E2E 基于 macOS 的 CDP + mock helper 架构）
+- DeepSeek 网页版选择器的健壮性（官网改版会导致失效）
+- 更多语言的 OCR 支持
+
+---
+
+## 支持这个项目
+
+如果它帮到了你，可以[请作者喝杯咖啡](https://github.com/youniszhang/huaci-assistant#支持这个项目) ☕️
+（App 内「关于」页也有收款码）
+
+## 致谢
+
+- 灵感来自 [obsidian-ai-explainer](https://github.com/youniszhang/obsidian-ai-explainer) 插件
+- 划词捕获方案参考了豆包的交互设计
+
 ## 许可证
 
-MIT
+MIT —— 详见 [LICENSE](LICENSE)

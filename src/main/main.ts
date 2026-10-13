@@ -932,25 +932,31 @@ function registerIpc(): void {
 		return true;
 	});
 
+	// 权限引导：仅 macOS 需要（辅助功能/输入监控/屏幕录制）。
+	// Windows 没有对应的系统级授权开关（UIA 与低级钩子开箱可用，截图受限于
+	// 受保护内容），因此这些入口在 Windows 上返回提示而非打开设置页。
 	ipcMain.handle(ch("capture:open-permission"), () => {
+		if (process.platform !== "darwin") return { ok: false, message: "当前系统无需此权限设置" };
 		void shell.openExternal(
 			"x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
 		);
-		return true;
+		return { ok: true };
 	});
 
 	ipcMain.handle(ch("capture:open-input-monitoring"), () => {
+		if (process.platform !== "darwin") return { ok: false, message: "当前系统无需此权限设置" };
 		void shell.openExternal(
 			"x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
 		);
-		return true;
+		return { ok: true };
 	});
 
 	ipcMain.handle(ch("capture:open-screen-recording"), () => {
+		if (process.platform !== "darwin") return { ok: false, message: "当前系统无需此权限设置" };
 		void shell.openExternal(
 			"x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
 		);
-		return true;
+		return { ok: true };
 	});
 
 	// 框选屏幕区域 → OCR → 分析

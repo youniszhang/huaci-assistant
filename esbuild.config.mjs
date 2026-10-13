@@ -24,6 +24,17 @@ const targets = [
   },
 ];
 
+/** 递归拷贝目录（renderer 下有 assets/ 子目录，不能只拷顶层文件） */
+function copyDir(from, to) {
+  fs.mkdirSync(to, { recursive: true });
+  for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+    const src = path.join(from, entry.name);
+    const dst = path.join(to, entry.name);
+    if (entry.isDirectory()) copyDir(src, dst);
+    else if (entry.isFile()) fs.copyFileSync(src, dst);
+  }
+}
+
 /** 把静态资源（preload / renderer / shared）拷进 dist，保证运行时相对路径一致 */
 function copyStatic() {
   const jobs = [
@@ -32,10 +43,7 @@ function copyStatic() {
     ["src/shared", "dist/shared"],
   ];
   for (const [from, to] of jobs) {
-    fs.mkdirSync(to, { recursive: true });
-    for (const f of fs.readdirSync(from)) {
-      fs.copyFileSync(path.join(from, f), path.join(to, f));
-    }
+    copyDir(from, to);
   }
   console.log("[copy] preload / renderer / shared → dist/");
 }

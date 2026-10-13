@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    SelectionHelper（Windows）— 系统级划词捕获助手
+
+    与 macOS 版（swift/SelectionHelper.swift）保持完全相同的 JSON-lines 协议，
+    因此 Electron 主进程（src/main/capture.ts）无需区分平台即可驱动。
+
+    目标框架：net8.0-windows10.0.19041.0
+      - 需要 19041+（Windows 10 2004）才能使用 Windows.Media.Ocr
+      - 用 dotnet publish 生成自包含单文件，用户机器无需安装 .NET 运行时
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>SelectionHelper</AssemblyName>
+    <RootNamespace>SelectionHelper</RootNamespace>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- 单文件发布时把原生库也打进去 -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- 关掉 WinRT 投影的隐式依赖警告（Ocr 用到） -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- UI Automation：读前台应用的选中文本 -->
+    <Reference Include="UIAutomationClient" />
+    <Reference Include="UIAutomationTypes" />
+  </ItemGroup>
+
+</Project>
