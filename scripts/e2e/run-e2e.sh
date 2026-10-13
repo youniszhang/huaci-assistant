@@ -11,7 +11,8 @@
 #   bash scripts/e2e/run-e2e.sh provider-crud      # 只跑供应商增删改（纯文件）
 #   bash scripts/e2e/run-e2e.sh hotkey-lead        # 快捷键录制 + 结论置顶渲染
 #   bash scripts/e2e/run-e2e.sh hotkey-firstpress  # 手动取词一次即弹（按两下问题）
-#   bash scripts/e2e/run-e2e.sh context-menu       # 右键菜单（复制/全选）
+#   bash scripts/e2e/run-e2e.sh context-menu       # 右键菜单（主窗口，原生）
+#   bash scripts/e2e/run-e2e.sh overlay-ctxmenu    # 悬浮卡片右键菜单（自绘）
 #   （provider-ui 需要手动准备临时 vault，见脚本头部说明）
 #
 # 关键点：
@@ -69,8 +70,26 @@ if [ "${CASES[*]}" = "hotkey-lead" ]; then
 fi
 
 # 备份真实 helper（字节级还原 → CDHash 不变 → TCC 权限无损）
+#
+# 注意：备份必须来自「可信源」。曾出现 bin/SelectionHelper 被历史测试污染后，
+# 备份跟着污染、还原也还原成错版本的情况 —— 而 helper 的 CDHash 决定了 TCC
+# 授权是否有效，变了就要重新授权。因此优先用安装版的 helper 作为权威副本，
+# 没有安装版时才回退到工作区副本（并打印警告）。
 BEFORE=$(shasum -a 256 bin/SelectionHelper | awk '{print $1}')
-cp bin/SelectionHelper "$DIR/SelectionHelper.bak"
+INSTALLED_HELPER="/Applications/划词助手.app/Contents/Resources/bin/SelectionHelper"
+if [ -f "$INSTALLED_HELPER" ]; then
+  cp "$INSTALLED_HELPER" "$DIR/SelectionHelper.bak"
+  # 工作区副本与安装版不一致 → 用安装版纠正（说明工作区被污染过）
+  if ! cmp -s bin/SelectionHelper "$INSTALLED_HELPER"; then
+    echo "⚠️  bin/SelectionHelper 与安装版不一致，已用安装版纠正（避免权限失效）"
+    cp "$INSTALLED_HELPER" bin/SelectionHelper
+    chmod +x bin/SelectionHelper
+    BEFORE=$(shasum -a 256 bin/SelectionHelper | awk '{print $1}')
+  fi
+else
+  echo "⚠️  未找到安装版 helper，改用工作区副本作备份（若它已被污染，CDHash 会变）"
+  cp bin/SelectionHelper "$DIR/SelectionHelper.bak"
+fi
 cp scripts/e2e/mock-helper.js bin/SelectionHelper
 chmod +x bin/SelectionHelper
 
@@ -137,6 +156,9 @@ for CASE in "${CASES[@]}"; do
       ;;
     context-menu)
       WS_PATH="$ROOT/node_modules/ws" node scripts/e2e/e2e-context-menu.js || RC=1
+      ;;
+    overlay-ctxmenu)
+      WS_PATH="$ROOT/node_modules/ws" node scripts/e2e/e2e-overlay-ctxmenu.js || RC=1
       ;;
     *)
       echo "未知用例: $CASE（可用: lifecycle v011）"; RC=1

@@ -273,6 +273,16 @@ export class OverlayWindow {
 		}
 	}
 
+	/** 当前是否已为「追问输入」临时获取焦点（右键菜单关闭时据此决定是否收回） */
+	isInputFocused(): boolean {
+		return this.focusedForInput;
+	}
+
+	/** 悬浮窗对应的 BrowserWindow（供右键菜单判断事件来源窗口） */
+	getBrowserWindow(): BrowserWindow | null {
+		return this.window;
+	}
+
 	hide(): void {
 		this.setFocusable(false);
 		this.window?.hide();

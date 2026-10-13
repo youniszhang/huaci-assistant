@@ -79,17 +79,22 @@ function check(name, cond, extra = "") { if (cond) { pass++; console.log("PASS  
   await sleep(800);
 
   /** 清空上次捕获，emit 一次 context-menu，返回菜单项 */
+  /**
+   * emit 一次 context-menu 并返回捕获到的菜单项。
+   * 主窗口用原生菜单，其「是否有选中」判定依赖 params.selectionText（可聚焦窗口
+   * 下该字段可靠），故这里按需传入 selectionText。
+   */
   async function emitContextMenu(withSelection) {
-    // 模拟真实右键时序：渲染层 contextmenu 先触发并上报，主进程 context-menu 后处理。
-    // 合成事件下渲染层的 getSelection 在 CDP 上下文里不同步，故显式上报目标值。
-    await ev(`(() => { window.huaci.reportContextMenu(${withSelection ? "true" : "false"}); return "reported"; })()`);
-    await sleep(200);
     await evM(`(() => { global.__lastMenuItems = null; return "cleared"; })()`);
     await evM(`(() => {
       const { BrowserWindow } = require("electron");
       const w = BrowserWindow.getAllWindows().find(x => x.webContents.getURL().includes("main.html"));
-      // 直接 emit（Electron 内部即以该事件分发右键），绕开 sendInputEvent 的聚焦限制
-      w.webContents.emit("context-menu", {}, { editFlags: {}, isEditable: false, selectionText: "", mediaType: "none", x: 300, y: 300 });
+      w.webContents.emit("context-menu", {}, {
+        editFlags: { canCopy: ${withSelection ? "true" : "false"} },
+        isEditable: false,
+        selectionText: ${withSelection ? JSON.stringify("测试选中的文字") : '""'},
+        mediaType: "none", x: 300, y: 300,
+      });
       return "emitted";
     })()`);
     await sleep(900);

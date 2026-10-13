@@ -874,32 +874,20 @@ function saveSession(): { ok: boolean; file?: string; replaced?: boolean; messag
  * 标准编辑菜单，选中文字后可直接右键复制。
  */
 /**
- * 渲染层在右键时同步上报的选区状态（见 preload.reportContextMenu）。
- * 按 webContents id 隔离：主窗口与悬浮卡片是两个窗口，共用全局变量会串味
- * （在一个窗口选中文字后，另一个窗口右键也会误判为「有选中」）。
+ * 右键菜单（复制 / 全选）—— 原生实现，用于「可聚焦的普通窗口」（主窗口）。
+ *
+ * 悬浮窗（卡片/工具条）不走这里：它 focusable:false，macOS 不会把它设为 key window，
+ * 原生菜单弹不出来（右键毫无反应）。悬浮窗改用渲染层自绘菜单（见 overlay.js）。
+ * 主窗口是可聚焦的，原生菜单正常工作，故保留此实现。
  */
-const ctxSelectionByWc = new Map<number, boolean>();
-
 function installContextMenu(): void {
 	app.on("web-contents-created", (_e, contents) => {
 		contents.on("context-menu", (_ev, params) => {
+			// 悬浮窗交给渲染层自绘菜单处理，这里直接跳过
+			if (contents === overlay.getBrowserWindow()?.webContents) return;
 			const { editFlags, isEditable } = params;
-			// selectionText 在部分场景下为空（实测：合成输入事件路径下恒为空），
-			// 只依赖它会导致「明明选中了文字，右键却只有全选」。改为以渲染层实时
-			// 选区为准，params.selectionText 仅作快速路径。
-			// 选区状态来源优先级：
-			//  1) 渲染层在 contextmenu 时同步上报的值（最可靠：时序与用户操作一致）
-			//  2) params.selectionText（部分输入路径下恒为空，作兜底）
-			let hasSelection = ctxSelectionByWc.get(contents.id) === true;
-			if (!hasSelection && !isEditable) {
-				hasSelection = !!(params.selectionText && params.selectionText.trim());
-			}
-			ctxSelectionByWc.set(contents.id, false); // 用后即清，避免状态残留
-			// 便于排查菜单项不符预期的情况（例如选中了文字却只看到「全选」）
-			// 便于排查菜单项不符预期（例如选中文字却只有「全选」）
-			if (!hasSelection) console.log(`[context-menu] 无选中（isEditable=${isEditable}），仅提供全选`);
+			let hasSelection = !!(params.selectionText && params.selectionText.trim());
 			const items: Electron.MenuItemConstructorOptions[] = [];
-			// 可编辑区域（追问输入框等）：给完整的编辑菜单
 			if (isEditable) {
 				items.push(
 					{ role: "undo", label: "撤销", enabled: editFlags.canUndo },
@@ -911,13 +899,8 @@ function installContextMenu(): void {
 					{ role: "selectAll", label: "全选", enabled: editFlags.canSelectAll }
 				);
 			} else if (hasSelection) {
-				// 非编辑区但有选中文字（生成结果正文）：复制 + 全选
-				items.push(
-					{ role: "copy", label: "复制" },
-					{ role: "selectAll", label: "全选" }
-				);
+				items.push({ role: "copy", label: "复制" }, { role: "selectAll", label: "全选" });
 			} else {
-				// 无选中内容：只给全选（便于一键选中整段结果）
 				items.push({ role: "selectAll", label: "全选" });
 			}
 			if (!items.length) return;
@@ -1252,10 +1235,6 @@ function registerIpc(): void {
 		console.log("[renderer]", msg);
 	});
 
-	// 右键时的选区状态（渲染层上报，供 installContextMenu 决定菜单项）
-	ipcMain.on(ch("system:ctx-selection"), (e, payload: { hasSelection: boolean }) => {
-		ctxSelectionByWc.set(e.sender.id, !!(payload && payload.hasSelection));
-	});
 
 	// 笔记
 	ipcMain.handle(ch("notes:list"), () => {

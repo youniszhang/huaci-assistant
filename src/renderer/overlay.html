@@ -73,6 +73,13 @@
     </div>
   </div>
 
+  <!-- 自绘右键菜单：悬浮窗 focusable:false，原生菜单弹不出来，故在渲染层实现 -->
+  <div id="ctxMenu" class="ctx-menu hidden">
+    <button class="ctx-item" data-ctx="copy">复制</button>
+    <button class="ctx-item" data-ctx="copyAll">复制全部</button>
+    <button class="ctx-item" data-ctx="selectAll">全选</button>
+  </div>
+
   <div id="toast" class="toast hidden"></div>
 </div>
 <script src="icons.js"></script>

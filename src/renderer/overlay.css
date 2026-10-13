@@ -581,3 +581,36 @@ body {
   text-overflow: ellipsis;
   backdrop-filter: blur(10px);
 }
+
+/* ---------------- 自绘右键菜单 ----------------
+   悬浮窗是 focusable:false（为了不抢焦点），macOS 不会把它设为 key window，
+   原生菜单（Menu.popup）无法显示 —— 表现为「右键毫无反应」。
+   因此菜单在渲染层实现：不依赖 key window，也不需要临时抢焦点。 */
+.ctx-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 132px;
+  padding: 4px;
+  background: var(--c-bg-panel);
+  border: 0.5px solid var(--c-separator);
+  border-radius: var(--r-button);
+  box-shadow: var(--shadow-popover);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+.ctx-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: var(--fs-small);
+  color: var(--c-text);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: default;
+  transition: background var(--dur) var(--ease);
+}
+.ctx-item:hover { background: var(--c-accent); color: #fff; }
+.ctx-item:disabled { color: var(--c-text-3); }
+.ctx-item:disabled:hover { background: transparent; color: var(--c-text-3); }

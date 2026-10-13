@@ -57,11 +57,6 @@
 
   Icons && Icons.hydrate();
 
-  // 右键时同步上报选区状态（主进程据此决定菜单项，见 main.ts installContextMenu）
-  document.addEventListener("contextmenu", () => {
-    const s = window.getSelection ? String(window.getSelection().toString() || "") : "";
-    window.huaci.reportContextMenu(s.trim().length > 0);
-  }, true);
 
   // 导航
   $("nav").addEventListener("click", (e) => {

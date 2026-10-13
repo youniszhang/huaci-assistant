@@ -222,7 +222,6 @@
     openNote: async () => ({ ok: true }),
 
     diag: () => {},
-    reportContextMenu: () => {},
 
     onSelection: (cb) => {
       (listeners["capture:selection"] ||= []).push(cb);

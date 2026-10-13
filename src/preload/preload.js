@@ -75,10 +75,6 @@ const bridge = {
   openNote: (payload) => ipcRenderer.invoke(API["notes:open"], payload),
 
   diag: (msg) => ipcRenderer.send(API["system:diag"], msg),
-
-  // 右键菜单：渲染层在 contextmenu 时同步上报「是否有选中文字」。
-  // 主进程的 context-menu 处理器据此决定菜单项（params.selectionText 不可靠）。
-  reportContextMenu: (hasSelection) => ipcRenderer.send(API["system:ctx-selection"], { hasSelection }),
 };
 
 contextBridge.exposeInMainWorld("huaci", bridge);

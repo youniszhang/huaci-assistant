@@ -150,14 +150,83 @@
   // 工具条关闭：选区消失会收起工具条，这里也提供手动关闭
   btnTbClose.addEventListener("click", () => api.hideOverlay());
 
-  // ------------------------------------------------ 右键菜单支持
+  // ------------------------------------------------ 右键菜单（自绘）
   //
-  // 主进程的 context-menu 处理器需要知道「当前是否有选中文字」来决定菜单项
-  // （params.selectionText 在部分输入路径下恒为空）。渲染层在右键时同步上报。
-  document.addEventListener("contextmenu", () => {
-    const s = window.getSelection ? String(window.getSelection().toString() || "") : "";
-    window.huaci.reportContextMenu(s.trim().length > 0);
+  // 悬浮窗 focusable:false，macOS 不把它当 key window，原生菜单弹不出来
+  // （右键毫无反应）。故在渲染层自绘：不依赖 key window，也不抢焦点。
+  const ctxMenu = $("ctxMenu");
+
+  function hideCtxMenu() {
+    ctxMenu.classList.add("hidden");
+  }
+
+  function selectedText() {
+    return window.getSelection ? String(window.getSelection().toString() || "") : "";
+  }
+
+  /** 打开菜单：位置贴近光标，超出窗口则回收到边界内 */
+  function openCtxMenu(x, y) {
+    const hasSel = selectedText().trim().length > 0;
+    ctxMenu.querySelector('[data-ctx="copy"]').disabled = !hasSel;
+    ctxMenu.classList.remove("hidden");
+    // 量出尺寸后收敛到窗口内（悬浮窗很小，菜单不能溢出）
+    const rect = ctxMenu.getBoundingClientRect();
+    const maxX = window.innerWidth - rect.width - 6;
+    const maxY = window.innerHeight - rect.height - 6;
+    ctxMenu.style.left = Math.max(6, Math.min(x, maxX)) + "px";
+    ctxMenu.style.top = Math.max(6, Math.min(y, maxY)) + "px";
+  }
+
+  document.addEventListener("contextmenu", (e) => {
+    // 只在我们自己的界面内响应（工具条/卡片），并阻止默认（默认也没菜单，但保持一致）
+    e.preventDefault();
+    e.stopPropagation();
+    openCtxMenu(e.clientX, e.clientY);
+  });
+
+  // 点击别处/滚动/按键 → 关闭菜单
+  document.addEventListener("mousedown", (e) => {
+    if (!e.target.closest("#ctxMenu")) hideCtxMenu();
   }, true);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hideCtxMenu();
+  });
+  window.addEventListener("blur", hideCtxMenu);
+
+  ctxMenu.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-ctx]");
+    if (!btn) return;
+    const action = btn.dataset.ctx;
+    hideCtxMenu();
+    if (action === "copy") {
+      const text = selectedText();
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast("已复制选中内容");
+      } catch {
+        showToast("复制失败");
+      }
+    } else if (action === "copyAll") {
+      if (!state.content) return showToast("还没有内容");
+      try {
+        await navigator.clipboard.writeText(state.content);
+        showToast("已复制全部内容");
+      } catch {
+        showToast("复制失败");
+      }
+    } else if (action === "selectAll") {
+      // 选中结果正文，便于用户再按 ⌘C
+      const body = document.getElementById("body");
+      if (!body) return;
+      const range = document.createRange();
+      range.selectNodeContents(body);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      showToast("已全选，按 ⌘C 复制");
+    }
+  });
 
   // ------------------------------------------------ JS 拖动
   //
