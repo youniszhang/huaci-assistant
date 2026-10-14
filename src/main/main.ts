@@ -9,7 +9,7 @@
  *  - 写入 Obsidian 笔记
  */
 
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
 import * as fs from "fs";
 import * as path from "path";
 import { SelectionCapture, SelectionEvent, ClickEvent, helperPath, ScreenRect, OcrResult } from "./capture";
@@ -1009,6 +1009,28 @@ function registerIpc(): void {
 	// 追问输入框获得焦点时，临时让悬浮窗可聚焦
 	ipcMain.handle(ch("overlay:focus"), (_e, payload: { focusable: boolean }) => {
 		overlay.setFocusable(!!payload?.focusable);
+		return true;
+	});
+
+	// 剪贴板写入：复制操作必须走主进程。
+	// 渲染层的 navigator.clipboard 在「窗口无焦点」时会被拒绝（悬浮窗默认
+	// focusable:false，用户点复制时空档就在这个间隙）—— 表现为「点了没反应」。
+	// Electron 主进程的 clipboard 模块不受焦点限制。
+	ipcMain.handle(ch("clipboard:write"), (_e, payload: { text: string }) => {
+		const text = String(payload?.text ?? "");
+		if (!text) return { ok: false, message: "没有可复制的内容" };
+		try {
+			clipboard.writeText(text);
+			return { ok: true };
+		} catch (err) {
+			return { ok: false, message: (err as Error).message };
+		}
+	});
+
+	// 鼠标悬停在悬浮窗内/外：临时可聚焦，使 ⌘C 等键盘操作与菜单点击可用
+	// （focusable:false 的窗口收不到键盘事件 —— 用户反馈的「选中后 ⌘C 无效」根因）
+	ipcMain.handle(ch("overlay:interactive"), (_e, payload: { focused: boolean }) => {
+		overlay.setInteractive(!!payload?.focused);
 		return true;
 	});
 

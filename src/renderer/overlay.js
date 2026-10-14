@@ -150,6 +150,55 @@
   // 工具条关闭：选区消失会收起工具条，这里也提供手动关闭
   btnTbClose.addEventListener("click", () => api.hideOverlay());
 
+  /**
+   * 复制到剪贴板。走主进程 —— 渲染层的 navigator.clipboard 在窗口无焦点时
+   * 会被拒绝（悬浮窗默认 focusable:false），表现为「点了没反应」。
+   */
+  async function copyText(text) {
+    if (!text) return false;
+    if (api.writeClipboard) {
+      const res = await api.writeClipboard(text);
+      return !!(res && res.ok);
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ------------------------------------------------ 交互态焦点
+  //
+  // 悬浮窗默认 focusable:false（不抢前台应用焦点）。但不可聚焦的窗口**收不到
+  // 键盘事件** —— 卡片里选中文字按 ⌘C 会毫无反应（用户实际反馈的问题）。
+  // 方案：鼠标进入悬浮窗时临时可聚焦（用户正在与它交互，符合预期），
+  // 离开即释放，恢复「不打扰前台应用」的默认状态。
+  (function setupInteractiveFocus() {
+    let inside = false;
+    const enter = () => {
+      if (inside) return;
+      inside = true;
+      api.setOverlayInteractive && api.setOverlayInteractive({ focused: true });
+    };
+    const leave = () => {
+      if (!inside) return;
+      inside = false;
+      api.setOverlayInteractive && api.setOverlayInteractive({ focused: false });
+    };
+    document.addEventListener("mouseenter", enter);
+    document.addEventListener("mouseleave", leave);
+    // mouseleave 在窗口内移动时可能不触发，用坐标兜底（移出窗口边界）
+    document.addEventListener("mousemove", (e) => {
+      const out = e.clientX <= 0 || e.clientY <= 0 ||
+                  e.clientX >= window.innerWidth - 1 || e.clientY >= window.innerHeight - 1;
+      if (out) leave();
+      else enter();
+    });
+    // 窗口隐藏时释放（主进程侧也会重置，这里保持两端一致）
+    window.addEventListener("blur", () => { inside = false; });
+  })();
+
   // ------------------------------------------------ 右键菜单（自绘）
   //
   // 悬浮窗 focusable:false，macOS 不把它当 key window，原生菜单弹不出来
@@ -193,28 +242,21 @@
   });
   window.addEventListener("blur", hideCtxMenu);
 
-  ctxMenu.addEventListener("click", async (e) => {
+  // 用 mousedown 而非 click 触发：click 需要「按下与抬起都不被系统吞掉」，
+  // 而悬浮窗在聚焦状态切换的间隙里 click 可能丢失（表现为「菜单点了没反应」）。
+  // mousedown 更早、更可靠。用 e.detail 防止同一次操作被 fire 两次。
+  ctxMenu.addEventListener("mousedown", async (e) => {
     const btn = e.target.closest("[data-ctx]");
     if (!btn) return;
     const action = btn.dataset.ctx;
     hideCtxMenu();
     if (action === "copy") {
       const text = selectedText();
-      if (!text) return;
-      try {
-        await navigator.clipboard.writeText(text);
-        showToast("已复制选中内容");
-      } catch {
-        showToast("复制失败");
-      }
+      if (!text) return showToast("没有选中内容");
+      showToast((await copyText(text)) ? "已复制选中内容" : "复制失败");
     } else if (action === "copyAll") {
       if (!state.content) return showToast("还没有内容");
-      try {
-        await navigator.clipboard.writeText(state.content);
-        showToast("已复制全部内容");
-      } catch {
-        showToast("复制失败");
-      }
+      showToast((await copyText(state.content)) ? "已复制全部内容" : "复制失败");
     } else if (action === "selectAll") {
       // 选中结果正文，便于用户再按 ⌘C
       const body = document.getElementById("body");
@@ -259,13 +301,8 @@
   })();
 
   btnCopy.addEventListener("click", async () => {
-    if (!state.content) return;
-    try {
-      await navigator.clipboard.writeText(state.content);
-      showToast("已复制");
-    } catch {
-      showToast("复制失败");
-    }
+    if (!state.content) return showToast("还没有内容");
+    showToast((await copyText(state.content)) ? "已复制" : "复制失败");
   });
 
   btnSave.addEventListener("click", async () => {
@@ -326,6 +363,18 @@
     if ((e.metaKey || e.ctrlKey) && e.key === "s") {
       e.preventDefault();
       btnSave.click();
+    }
+    // ⌘C / Ctrl+C：有选中内容时复制它；没选中则复制整篇结果。
+    // 显式接管而不是依赖系统默认行为 —— 悬浮窗的焦点状态与普通窗口不同，
+    // 系统默认复制在 focusable 切换的边缘场景下不可靠。
+    if ((e.metaKey || e.ctrlKey) && e.key === "c") {
+      const sel = window.getSelection ? String(window.getSelection().toString() || "") : "";
+      const text = sel.trim() ? sel : state.content;
+      if (!text) return;
+      e.preventDefault();
+      copyText(text).then((ok) =>
+        showToast(ok ? (sel.trim() ? "已复制选中内容" : "已复制全部内容") : "复制失败")
+      );
     }
   });
 

@@ -45,6 +45,8 @@ export class OverlayWindow {
 	private quitting = false;
 	/** 用户是否手动拖动过悬浮窗（拖动后 resize/重定位不再拽回锚点） */
 	private userMoved = false;
+	/** 鼠标是否悬停在悬浮窗内（悬停时临时可聚焦，见 setInteractive） */
+	private interactive = false;
 	/** 拖动跟随定时器（JS 拖动，见 drag()） */
 	private dragTimer: NodeJS.Timeout | null = null;
 	private dragOffset = { x: 0, y: 0 };
@@ -217,6 +219,7 @@ export class OverlayWindow {
 		const win = this.create();
 		this.mode = "toolbar";
 		this.setFocusable(false);
+		this.interactive = false;
 		this.placeAt(pos, this.toolbarWidth, TOOLBAR_H);
 		win.webContents.send("overlay:state", { mode: "toolbar" });
 		if (!win.isVisible()) win.showInactive();
@@ -278,6 +281,38 @@ export class OverlayWindow {
 		return this.focusedForInput;
 	}
 
+	/**
+	 * 交互态焦点：鼠标在悬浮窗内时临时可聚焦，移开后释放。
+	 *
+	 * 为什么需要：窗口默认 focusable:false（为了不抢前台应用焦点）。
+	 * 但不可聚焦的窗口**收不到键盘事件** —— 卡片里选中文字后按 ⌘C 毫无反应，
+	 * 自绘菜单的点击在部分场景也不稳。这两点都是用户实际反馈的问题。
+	 *
+	 * 设计取舍：只在鼠标悬停于悬浮窗时获取焦点（用户此时正与它交互，
+	 * 抢焦点符合预期）；移开即释放，恢复到「不打扰前台应用」的默认状态。
+	 * 追问输入框另有 setFocusable(true) 的显式保持（见其调用点）。
+	 */
+	setInteractive(focused: boolean): void {
+		const win = this.window;
+		if (!win) return;
+		// 追问输入期间不动（它已持有焦点，且不能因为鼠标移开就失去焦点）
+		if (this.focusedForInput) return;
+		if (focused === this.interactive) return;
+		this.interactive = focused;
+		try {
+			win.setFocusable(focused);
+			// 只设置可聚焦，不主动 focus()：鼠标悬停不等于用户点了它，
+			// 主动抢焦点会让「轻轻划过卡片」也打断前台应用输入
+		} catch {
+			// 某些平台/版本不支持，忽略
+		}
+	}
+
+	/** 是否处于「鼠标悬停交互」态（用于判断焦点归属） */
+	isInteractive(): boolean {
+		return this.interactive;
+	}
+
 	/** 悬浮窗对应的 BrowserWindow（供右键菜单判断事件来源窗口） */
 	getBrowserWindow(): BrowserWindow | null {
 		return this.window;
@@ -285,6 +320,8 @@ export class OverlayWindow {
 
 	hide(): void {
 		this.setFocusable(false);
+		// 隐藏时重置交互态：鼠标悬停标志会残留，导致下次显示时焦点状态不对
+		this.interactive = false;
 		this.window?.hide();
 	}
 

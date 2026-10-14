@@ -24,6 +24,7 @@ const API = {
   'overlay:drag': 'overlay:drag',                // 渲染层 → main：卡片/工具条拖动
   'overlay:resize': 'overlay:resize',
   'overlay:focus': 'overlay:focus',              // 追问输入时临时获取焦点
+  'overlay:interactive': 'overlay:interactive',  // 鼠标悬停时临时可聚焦（收键盘事件）
   'overlay:open-main': 'overlay:open-main',
   'overlay:chunk': 'overlay:chunk',              // main → renderer 推送
   'overlay:done': 'overlay:done',
@@ -63,6 +64,7 @@ const API = {
   // 系统
   'system:pick-vault': 'system:pick-vault',
   'system:open-external': 'system:open-external',
+  'clipboard:write': 'clipboard:write',            // 复制（走主进程，不受焦点限制）
   'system:diag': 'system:diag',
 }
 

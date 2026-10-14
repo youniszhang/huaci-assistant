@@ -1,7 +1,7 @@
 {
   "name": "huaci-assistant",
   "productName": "划词助手",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "系统级划词解释助手：任意应用划词 → AI 流式解释 → 一键录入 Obsidian（macOS / Windows）",
   "main": "dist/main/main.js",
   "author": "youniszhang",

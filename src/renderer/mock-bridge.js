@@ -117,6 +117,7 @@
     dragOverlay: async () => true,
     resizeOverlay: async () => true,
     focusOverlay: async () => true,
+    setOverlayInteractive: async () => true,
     openMain: async () => true,
 
     listVaults: async () => ({
@@ -213,6 +214,14 @@
     })),
     pickVault: async () => ({ ok: false }),
     openExternal: async () => true,
+    writeClipboard: async ({ text }) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        return { ok: true };
+      } catch {
+        return { ok: false, message: "mock：剪贴板不可用" };
+      }
+    },
 
     listNotes: async () => ({
       notes: [{ date: "2026-10-07", file: "/mock/2026-10-07.md", size: 1024 }],

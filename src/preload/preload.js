@@ -35,6 +35,7 @@ const bridge = {
   dragOverlay: (phase) => ipcRenderer.invoke(API["overlay:drag"], { phase }),
   resizeOverlay: (payload) => ipcRenderer.invoke(API["overlay:resize"], payload),
   focusOverlay: (payload) => ipcRenderer.invoke(API["overlay:focus"], payload),
+  setOverlayInteractive: (payload) => ipcRenderer.invoke(API["overlay:interactive"], payload),
   openMain: () => ipcRenderer.invoke(API["overlay:open-main"]),
   onChunk: (cb) => subscribe(API["overlay:chunk"], cb),
   onDone: (cb) => subscribe(API["overlay:done"], cb),
@@ -68,6 +69,7 @@ const bridge = {
   getDefaultActions: () => ipcRenderer.invoke(API["settings:default-actions"]),
   pickVault: () => ipcRenderer.invoke(API["system:pick-vault"]),
   openExternal: (url) => ipcRenderer.invoke(API["system:open-external"], { url }),
+  writeClipboard: (text) => ipcRenderer.invoke(API["clipboard:write"], { text }),
 
   // ---- 笔记 ----
   listNotes: () => ipcRenderer.invoke(API["notes:list"]),
